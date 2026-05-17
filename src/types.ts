@@ -44,6 +44,7 @@ export interface MultiplexStat {
 
 export interface ScanStats {
   startTime: Date;
+  timeZoneStr?: string;
   rxLat?: number;
   rxLon?: number;
   channelCount: number;

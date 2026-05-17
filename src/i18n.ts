@@ -42,7 +42,7 @@ export const translations = {
     exportMapJpeg: "Exporter la carte au format JPEG",
     noGeodata: "Aucune donnée de géolocalisation disponible dans ce fichier. La carte n'a pas pu être générée.",
     maxSnrChart: "Niveaux SNR des multiplex reçus",
-    compactView: "Vue compacte",
+    compactView: "Affichage compact",
   },
   en: {
     appTitle: "TII Logs Analyzer for AbracaDABra",

@@ -280,7 +280,10 @@ export function Dashboard({ stats, onReset }: DashboardProps) {
   
   const dateLocale = language === 'fr' ? fr : enUS;
   const dateFormat = language === 'fr' ? "dd/MM/yyyy 'à' HH'h'mm" : "dd/MM/yyyy 'at' HH:mm";
-  const formattedDate = format(stats.startTime, dateFormat, { locale: dateLocale });
+  let formattedDate = format(stats.startTime, dateFormat, { locale: dateLocale });
+  if (stats.timeZoneStr) {
+    formattedDate += ` ${stats.timeZoneStr}`;
+  }
 
   const mapRef = useRef<HTMLDivElement>(null);
 

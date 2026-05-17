@@ -24,4 +24,4 @@ Otherwise, copy and paste the following URL: `https://lucasgallone.github.io/Abr
 
 - - -
 
-If you notice any bugs in the interface (despite the tests I have carried out), do not hesitate to report them in the [Issues](https://github.com/LucasGallone/AbracaDABra-TII-Logs-Analyzer/issues) section.
+If you notice any bug in the interface (despite the tests I have carried out), do not hesitate to report it in the [Issues](https://github.com/LucasGallone/AbracaDABra-TII-Logs-Analyzer/issues) section.

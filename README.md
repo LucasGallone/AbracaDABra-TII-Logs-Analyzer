@@ -21,3 +21,7 @@ Otherwise, copy and paste the following URL: `https://lucasgallone.github.io/Abr
 <img width="1918" alt="tii-analyzer2" src="https://github.com/user-attachments/assets/7f530a02-6ab7-4932-9793-83d1164f2db1" />
 <img width="1918" alt="tii-analyzer3" src="https://github.com/user-attachments/assets/b1d697d0-cd65-454e-940a-b69ed579ee86" />
 <img width="1918" alt="tii-analyzer4" src="https://github.com/user-attachments/assets/0a737de3-e176-43ff-bfce-22d46c0d66c6" />
+
+- - -
+
+If you notice any bugs in the interface (despite the tests I have carried out), do not hesitate to report them in the [Issues](https://github.com/LucasGallone/AbracaDABra-TII-Logs-Analyzer/issues) section.

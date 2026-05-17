@@ -14,7 +14,16 @@ export function parseDABData(data: RawDABRow[]): ScanStats | null {
   // Find the exact name of the Time column
   const timeKey = Object.keys(validData[0]).find(k => k.startsWith('Time')) || 'Time (UTC)';
 
+  let timeZoneStr: string | undefined = undefined;
   if (timeKey) {
+    const tzMatch = timeKey.trim().match(/^Time \((.+?)\)$/);
+    if (tzMatch && tzMatch[1]) {
+      const tz = tzMatch[1];
+      if (/^[A-Z]{3,4}$/.test(tz)) {
+        timeZoneStr = `[${tz}]`;
+      }
+    }
+
     dates = validData.map(r => new Date(r[timeKey]).getTime()).filter(t => !isNaN(t));
     if (dates.length > 0) {
       startTime = new Date(Math.min(...dates));
@@ -194,6 +203,7 @@ export function parseDABData(data: RawDABRow[]): ScanStats | null {
 
   return {
     startTime,
+    timeZoneStr,
     rxLat,
     rxLon,
     channelCount: channelSet.size,

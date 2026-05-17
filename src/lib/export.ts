@@ -9,7 +9,10 @@ export function generateTXT(stats: ScanStats, language: Language, includeLocatio
   const t = (key: keyof typeof translations.fr) => translations[language][key];
   const dateLocale = language === 'fr' ? fr : enUS;
   const dateFormat = language === 'fr' ? "dd/MM/yyyy 'à' HH'h'mm" : "dd/MM/yyyy 'at' HH:mm";
-  const formattedDate = format(stats.startTime, dateFormat, { locale: dateLocale });
+  let formattedDate = format(stats.startTime, dateFormat, { locale: dateLocale });
+  if (stats.timeZoneStr) {
+    formattedDate += ` ${stats.timeZoneStr}`;
+  }
 
   const lines: string[] = [];
   lines.push(`--- ${t('reportTitle')} ---`);
@@ -75,7 +78,10 @@ export function generatePDF(stats: ScanStats, language: Language, mapImg?: { url
   const t = (key: keyof typeof translations.fr) => translations[language][key];
   const dateLocale = language === 'fr' ? fr : enUS;
   const dateFormat = language === 'fr' ? "dd/MM/yyyy 'à' HH'h'mm" : "dd/MM/yyyy 'at' HH:mm";
-  const formattedDate = format(stats.startTime, dateFormat, { locale: dateLocale });
+  let formattedDate = format(stats.startTime, dateFormat, { locale: dateLocale });
+  if (stats.timeZoneStr) {
+    formattedDate += ` ${stats.timeZoneStr}`;
+  }
 
   const doc = new jsPDF();
   

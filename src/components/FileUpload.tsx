@@ -82,7 +82,7 @@ export function FileUpload({ onDataParsed }: FileUploadProps) {
         onDrop={handleDrop}
         className={cn(
           "w-full p-12 border-4 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all duration-200 cursor-pointer text-center bg-white dark:bg-slate-800",
-          isDragging ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20" : "border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-slate-50 dark:hover:bg-slate-750"
+          isDragging ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20" : "border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-slate-50 dark:hover:bg-slate-700"
         )}
       >
         <UploadCloud className={cn("w-16 h-16 mb-4 transition-colors", isDragging ? "text-blue-500 dark:text-blue-400" : "text-slate-400 dark:text-slate-500")} />

@@ -2,10 +2,12 @@
 A web interface that allows you to analyze AbracaDABra's "TII logs" (CSV format) to create a clear summary of a DAB bandscan, including details about detections, TII codes, transmitter locations, etc.
 <br>
 <br>
-Works best with logs generated from V4 of the software onwards. Receptions can be visualized on a map if the logs contain GPS coordinates (Tested on V3 too, but the transmitter sites are not shown on the map).
+Works best with logs generated from V4 of the software onwards. Receptions can be visualized on a map if the logs contain GPS coordinates (Tested with log files made on V3 too, but the transmitter sites are not shown on the map).
 <br>
 <br>
-AbracaDABra is a DAB and DAB+ Software Defined Radio (SDR) application, made by [@KejPi](https://github.com/KejPi/). To learn more about it, [click here.](https://github.com/KejPi/AbracaDABra)
+AbracaDABra is a DAB and DAB+ Software Defined Radio (SDR) application, made by [@KejPi](https://github.com/KejPi/).
+<br>
+To learn more about it, [click here.](https://github.com/KejPi/AbracaDABra)
 
 - - -
 

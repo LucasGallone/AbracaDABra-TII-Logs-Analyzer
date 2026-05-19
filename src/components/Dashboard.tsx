@@ -123,23 +123,25 @@ const MultiplexCard: React.FC<{ mux: MultiplexStat, compact?: boolean }> = ({ mu
           </div>
 
           {/* Best Received Transmitter */}
-          <div className="p-3 w-full lg:w-48 shrink-0 flex flex-col justify-center bg-amber-50/30 dark:bg-amber-900/10">
-             <h4 className="text-[10px] uppercase tracking-wider font-semibold text-amber-600 dark:text-amber-500 mb-1 flex items-center gap-1">
-               <Signal className="w-3 h-3 shrink-0" /> {t('bestTx')}
-             </h4>
-             {mux.bestTransmitter ? (
-               <div className="text-xs break-words">
-                  <div className="font-medium text-slate-800 dark:text-slate-200 line-clamp-2" title={mux.bestTransmitter.location || t('unknown')}>
-                    {mux.bestTransmitter.location || t('unknown')}
-                  </div>
-                  <div className="text-slate-500 dark:text-slate-400 mt-0.5">
-                     TII: <span className="font-mono">{mux.bestTransmitter.tii}</span>
-                  </div>
-               </div>
-             ) : (
-               <span className="text-slate-400 italic text-[10px]">{t('insufficientData')}</span>
-             )}
-          </div>
+          {mux.transmitters.length > 1 && (
+            <div className="p-3 w-full lg:w-48 shrink-0 flex flex-col justify-center bg-amber-50/30 dark:bg-amber-900/10">
+               <h4 className="text-[10px] uppercase tracking-wider font-semibold text-amber-600 dark:text-amber-500 mb-1 flex items-center gap-1">
+                 <Signal className="w-3 h-3 shrink-0" /> {t('bestTx')}
+               </h4>
+               {mux.bestTransmitter ? (
+                 <div className="text-xs break-words">
+                    <div className="font-medium text-slate-800 dark:text-slate-200 line-clamp-2" title={mux.bestTransmitter.location || t('unknown')}>
+                      {mux.bestTransmitter.location || t('unknown')}
+                    </div>
+                    <div className="text-slate-500 dark:text-slate-400 mt-0.5">
+                       TII: <span className="font-mono">{mux.bestTransmitter.tii}</span>
+                    </div>
+                 </div>
+               ) : (
+                 <span className="text-slate-400 italic text-[10px]">{t('insufficientData')}</span>
+               )}
+            </div>
+          )}
         </div>
       );
     }
@@ -210,20 +212,22 @@ const MultiplexCard: React.FC<{ mux: MultiplexStat, compact?: boolean }> = ({ mu
           </div>
         </div>
         
-        <div className={`mt-auto ${compact ? 'pt-3' : 'pt-4'} border-t border-slate-100 dark:border-slate-700/50 text-sm`}>
-           <h4 className="text-xs uppercase tracking-wider font-semibold text-amber-600 dark:text-amber-500 mb-2 flex items-center gap-1">
-             <Signal className="w-3 h-3 shrink-0" /> {t('bestTx')}
-           </h4>
-           {mux.bestTransmitter ? (
-             <div className="flex justify-between items-center text-left">
-                <span className={`font-medium text-slate-800 dark:text-slate-200 truncate ${compact ? 'text-xs' : ''}`}>
-                  {mux.bestTransmitter.location || t('unknown')} <span className="text-slate-500 dark:text-slate-400 font-normal">({language === 'fr' ? `TII : ${mux.bestTransmitter.tii}` : `TII: ${mux.bestTransmitter.tii}`})</span>
-                </span>
-             </div>
-           ) : (
-             <span className="text-slate-400 italic text-xs">{t('insufficientData')}</span>
-           )}
-        </div>
+        {mux.transmitters.length > 1 && (
+          <div className={`mt-auto ${compact ? 'pt-3' : 'pt-4'} border-t border-slate-100 dark:border-slate-700/50 text-sm`}>
+             <h4 className="text-xs uppercase tracking-wider font-semibold text-amber-600 dark:text-amber-500 mb-2 flex items-center gap-1">
+               <Signal className="w-3 h-3 shrink-0" /> {t('bestTx')}
+             </h4>
+             {mux.bestTransmitter ? (
+               <div className="flex justify-between items-center text-left">
+                  <span className={`font-medium text-slate-800 dark:text-slate-200 truncate ${compact ? 'text-xs' : ''}`}>
+                    {mux.bestTransmitter.location || t('unknown')} <span className="text-slate-500 dark:text-slate-400 font-normal">({language === 'fr' ? `TII : ${mux.bestTransmitter.tii}` : `TII: ${mux.bestTransmitter.tii}`})</span>
+                  </span>
+               </div>
+             ) : (
+               <span className="text-slate-400 italic text-xs">{t('insufficientData')}</span>
+             )}
+          </div>
+        )}
       </div>
     </div>
   );

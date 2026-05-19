@@ -4,6 +4,7 @@ import React, { useCallback, useState } from 'react';
 import { cn } from '../lib/utils';
 import { RawDABRow } from '../types';
 import { useAppContext } from '../contexts/AppContext';
+import { transformColumnHeader } from '../lib/headerMap';
 
 interface FileUploadProps {
   onDataParsed: (data: RawDABRow[]) => void;
@@ -38,17 +39,21 @@ export function FileUpload({ onDataParsed }: FileUploadProps) {
       header: true,
       skipEmptyLines: true,
       delimiter: ';',
+      transformHeader: transformColumnHeader,
       complete: (results) => {
         if (results.errors && results.errors.length > 0) {
           setError(`${t('parseError')} ${results.errors[0].message}`);
           return;
         }
         
-        const hasTimeColumn = Object.keys(results.data[0] || {}).some(k => k.startsWith('Time'));
-        if (results.data.length > 0 && hasTimeColumn && results.data[0]['Channel']) {
+        const firstRow: any = results.data[0] || {};
+        const numColumns = Object.keys(firstRow).length;
+        const hasTimeColumn = Object.keys(firstRow).some(k => k.startsWith('Time'));
+
+        if (results.data.length > 0 && hasTimeColumn && firstRow['Channel'] && numColumns >= 8) {
           onDataParsed(results.data);
         } else {
-          setError(t('invalidFormat'));
+          setError('INVALID_FORMAT');
         }
       },
       error: (err) => {
@@ -106,7 +111,23 @@ export function FileUpload({ onDataParsed }: FileUploadProps) {
       
       {error && (
         <div className="mt-6 p-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg text-red-700 dark:text-red-400 w-full text-center text-sm">
-          {error}
+          {error === 'INVALID_FORMAT' ? (
+            <div className="flex flex-col gap-4">
+              <div>
+                <p className="font-semibold">{t('invalidFormatTitle')}</p>
+                <p>{t('invalidFormatP1')}</p>
+              </div>
+              <p>
+                {t('invalidFormatP2Part1')}
+                <a href="https://github.com/LucasGallone/AbracaDABra-TII-Logs-Analyzer/issues/" target="_blank" rel="noopener noreferrer" className="underline hover:text-red-800 dark:hover:text-red-300">
+                  {t('invalidFormatLink')}
+                </a>
+                {t('invalidFormatP2Part2')}
+              </p>
+            </div>
+          ) : (
+            error
+          )}
         </div>
       )}
     </div>

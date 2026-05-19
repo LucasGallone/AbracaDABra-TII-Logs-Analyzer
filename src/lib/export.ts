@@ -67,7 +67,7 @@ export function generateTXT(stats: ScanStats, language: Language, includeLocatio
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `scan_report_${format(stats.startTime, 'yyyyMMdd_HHmm')}.txt`;
+  a.download = `TII-Analyzer-Report_${format(stats.startTime, 'yyyy-MM-dd_HHmm')}.txt`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -301,5 +301,5 @@ export function generatePDF(stats: ScanStats, language: Language, mapImg?: { url
     currentY = (doc as any).lastAutoTable.finalY + 15;
   });
 
-  doc.save(`scan_report_${format(stats.startTime, 'yyyyMMdd_HHmm')}.pdf`);
+  doc.save(`TII-Analyzer-Report_${format(stats.startTime, 'yyyy-MM-dd_HHmm')}.pdf`);
 }

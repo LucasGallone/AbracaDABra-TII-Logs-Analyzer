@@ -128,31 +128,6 @@ export const transformColumnHeader = (header: string, index?: number): string =>
   if (headerMap[lowerH]) {
     return headerMap[lowerH];
   }
-
-  // Fallback by column index if the header is unknown
-  if (index !== undefined) {
-    const indexMap: Record<number, string> = {
-      1: 'Channel',
-      2: 'Frequency [kHz]',
-      3: 'UEID',
-      4: 'Label',
-      5: 'SNR [dB]',
-      6: 'Main',
-      7: 'Sub',
-      8: 'Level [dB]',
-      9: 'Location',
-      10: 'Power [kW]',
-      11: 'Distance [km]',
-      12: 'Azimuth [deg]',
-      13: 'Latitude (TX)',
-      14: 'Longitude (TX)',
-      15: 'Latitude (RX)',
-      16: 'Longitude (RX)'
-    };
-    if (indexMap[index]) {
-      return indexMap[index];
-    }
-  }
-
+  
   return header;
 };

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import { Mountain, X, Radio, RadioTower, Filter, Check } from 'lucide-react';
 import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
@@ -323,7 +323,7 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
       rxC = [stats.rxLat, stats.rxLon];
     }
 
-    const txMap = new Map<string, { lat: number; lon: number; location: string; distance: number; azimuth?: number; muxData: { channel: string; info: string; }[] }>();
+    const txMap = new Map<string, { lat: number; lon: number; location: string; distance: number; azimuth?: number; muxData: { channel: string; label: string; tii: string; powerStr: string; }[] }>();
     const bnd = new L.LatLngBounds([]);
 
     if (rxC) {

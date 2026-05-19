@@ -6,11 +6,14 @@ import { ScanStats, MultiplexStat } from '../types';
 import { useAppContext } from '../contexts/AppContext';
 import { generatePDF, generateTXT } from '../lib/export';
 import { CoverageMap } from './CoverageMap';
+import { LocationPromptModal } from './LocationPromptModal';
 import { toJpeg } from 'html-to-image';
+import { sortChannels } from '../lib/utils';
 
 interface DashboardProps {
   stats: ScanStats;
   onReset: () => void;
+  onUpdateStats: React.Dispatch<React.SetStateAction<ScanStats | null>>;
 }
 
 function StatCard({ title, value, icon, subtitle }: { title: string, value: string | number, icon: React.ReactNode, subtitle?: string }) {
@@ -95,11 +98,11 @@ const MultiplexCard: React.FC<{ mux: MultiplexStat, compact?: boolean }> = ({ mu
              <div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
                {mux.transmitters.map((tx, i) => (
                    <div key={i} className="flex justify-between items-center text-xs bg-slate-50 dark:bg-[#2B2D31]/30 p-1.5 rounded-md border border-slate-100 dark:border-slate-700/30">
-                     <div className="flex items-center gap-2 overflow-hidden w-full">
+                     <div className="flex items-center gap-2 overflow-hidden w-full min-w-0">
                         <span className="font-mono text-[10px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 py-0.5 px-1.5 rounded shrink-0">
                           {tx.tii}
                         </span>
-                        <span className="truncate text-slate-700 dark:text-slate-200 font-medium" title={tx.location || t('unknownSite')}>
+                        <span className="truncate text-slate-700 dark:text-slate-200 font-medium flex-1 min-w-0" title={tx.location || t('unknownSite')}>
                           {tx.location || t('unknownSite')}
                         </span>
                      </div>
@@ -179,12 +182,12 @@ const MultiplexCard: React.FC<{ mux: MultiplexStat, compact?: boolean }> = ({ mu
           <div className="space-y-3">
             {mux.transmitters.map((tx, i) => (
                <div key={i} className={`flex justify-between items-center text-sm bg-slate-50 dark:bg-[#2B2D31]/30 ${compact ? 'p-1.5' : 'p-2'} rounded-md`}>
-                 <div className="flex items-start gap-2 overflow-hidden flex-col w-full">
-                    <div className="flex items-center gap-2">
-                      <span className={`font-mono ${compact ? 'text-[10px]' : 'text-xs'} font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 py-0.5 px-1.5 rounded whitespace-nowrap`}>
+                 <div className="flex items-start gap-2 overflow-hidden flex-col w-full min-w-0">
+                    <div className="flex items-center gap-2 w-full min-w-0">
+                      <span className={`font-mono ${compact ? 'text-[10px]' : 'text-xs'} font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 py-0.5 px-1.5 rounded whitespace-nowrap shrink-0`}>
                         {tx.tii}
                       </span>
-                      <span className={`truncate text-slate-700 dark:text-slate-200 font-medium ${compact ? 'text-xs' : ''} pb-1`}>
+                      <span className={`truncate text-slate-700 dark:text-slate-200 font-medium ${compact ? 'text-xs' : ''} pb-1 flex-1 min-w-0`} title={tx.location || t('unknownSite')}>
                         {tx.location || t('unknownSite')}
                       </span>
                     </div>
@@ -226,7 +229,7 @@ const MultiplexCard: React.FC<{ mux: MultiplexStat, compact?: boolean }> = ({ mu
   );
 }
 
-export function Dashboard({ stats, onReset }: DashboardProps) {
+export function Dashboard({ stats, onReset, onUpdateStats }: DashboardProps) {
   const { language, t } = useAppContext();
   const [sortMode, setSortMode] = useState<'channel' | 'label'>('channel');
   const [showMapLines, setShowMapLines] = useState(() => {
@@ -244,6 +247,8 @@ export function Dashboard({ stats, onReset }: DashboardProps) {
     return saved !== null ? saved === 'true' : true;
   });
   const [exportNotes, setExportNotes] = useState('');
+  
+  const [showLocationPrompt, setShowLocationPrompt] = useState(stats.rxLat === undefined);
 
   useEffect(() => {
     localStorage.setItem('dab_showMapLines', String(showMapLines));
@@ -258,25 +263,32 @@ export function Dashboard({ stats, onReset }: DashboardProps) {
   }, [includeLocationInExport]);
 
   useEffect(() => {
-    if (stats.rxLat !== undefined && stats.rxLon !== undefined) {
-      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${stats.rxLat}&lon=${stats.rxLon}&zoom=18&addressdetails=1`)
+    if (stats.rxLocationName) {
+      setLocationName(stats.rxLocationName);
+    } else if (stats.rxLat !== undefined && stats.rxLon !== undefined) {
+      const acceptLang = language === 'fr' ? 'fr' : 'en';
+      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${stats.rxLat}&lon=${stats.rxLon}&zoom=18&addressdetails=1&accept-language=${acceptLang}`)
         .then(res => res.json())
         .then(data => {
-          if (data && data.display_name) {
+          if (data && data.address) {
              const addr = data.address;
-             const city = addr?.city || addr?.town || addr?.village || addr?.municipality;
-             const country = addr?.country;
-             let shortName = city && country ? `${city}, ${country}` : data.display_name;
-             const road = addr?.road || addr?.pedestrian || addr?.suburb;
-             if (road && city && country) {
-                shortName = `${road}, ${city}, ${country}`;
+             const street = addr.road || addr.pedestrian || addr.path || addr.hamlet || addr.suburb || '';
+             const city = addr.city || addr.town || addr.village || addr.municipality || '';
+             const country = addr.country || '';
+             const parts = [street, city, country].filter(Boolean);
+             
+             if (parts.length > 0) {
+               setLocationName(parts.join(', '));
+             } else if (data.display_name) {
+               setLocationName(data.display_name);
              }
-             setLocationName(shortName);
+          } else if (data && data.display_name) {
+             setLocationName(data.display_name);
           }
         })
         .catch(err => console.error(err));
     }
-  }, [stats.rxLat, stats.rxLon]);
+  }, [stats.rxLat, stats.rxLon, stats.rxLocationName, language]);
   
   const dateLocale = language === 'fr' ? fr : enUS;
   const dateFormat = language === 'fr' ? "dd/MM/yyyy 'à' HH'h'mm" : "dd/MM/yyyy 'at' HH:mm";
@@ -345,15 +357,7 @@ export function Dashboard({ stats, onReset }: DashboardProps) {
   const sortedMultiplexes = useMemo(() => {
     return [...stats.multiplexes].sort((a, b) => {
       if (sortMode === 'channel') {
-        const aMatch = a.channel.match(/(\d+)([a-zA-Z]*)/);
-        const bMatch = b.channel.match(/(\d+)([a-zA-Z]*)/);
-        if (aMatch && bMatch) {
-          const aNum = parseInt(aMatch[1], 10);
-          const bNum = parseInt(bMatch[1], 10);
-          if (aNum !== bNum) return aNum - bNum;
-          return (aMatch[2] || '').localeCompare(bMatch[2] || '');
-        }
-        return a.channel.localeCompare(b.channel);
+        return sortChannels(a.channel, b.channel);
       } else if (sortMode === 'label') {
         return a.label.localeCompare(b.label);
       }
@@ -361,24 +365,37 @@ export function Dashboard({ stats, onReset }: DashboardProps) {
     });
   }, [stats.multiplexes, sortMode]);
 
+  if (showLocationPrompt) {
+    return (
+      <LocationPromptModal 
+        stats={stats}
+        onSkip={() => setShowLocationPrompt(false)}
+        onApply={(lat, lon, address) => {
+          onUpdateStats(prev => prev ? { ...prev, rxLat: lat, rxLon: lon, rxLocationName: address } : null);
+          setShowLocationPrompt(false);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="w-full max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-        <div>
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-8 gap-4">
+        <div className="flex-1 min-w-0 pr-0 xl:pr-4">
           <h1 className="text-3xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">{t('reportTitle')}</h1>
-           <p className="text-slate-500 dark:text-slate-400 mt-1 flex flex-col sm:flex-row sm:items-center gap-2">
-             <span className="flex items-center gap-2">
-               <Activity className="w-4 h-4" />
+           <div className="text-slate-500 dark:text-slate-400 mt-1 flex flex-col sm:flex-row sm:items-center gap-2">
+             <span className="flex items-center gap-2 whitespace-nowrap">
+               <Activity className="w-4 h-4 shrink-0" />
                {t('scanStart')} <span className="font-semibold text-slate-700 dark:text-slate-300">{formattedDate}</span>
              </span>
              {(stats.rxLat !== undefined && stats.rxLon !== undefined) && (
                <>
-                 <span className="hidden sm:inline text-slate-300 dark:text-slate-600">•</span>
-                 <span className="flex items-start sm:items-center gap-1.5 text-sm">
+                 <span className="hidden sm:inline text-slate-300 dark:text-slate-600 shrink-0">•</span>
+                 <span className="flex items-start sm:items-center gap-1.5 text-sm min-w-0">
                    <MapPin className="w-4 h-4 text-blue-500 shrink-0 mt-0.5 sm:mt-0" />
-                   <span className="flex flex-col text-slate-700 dark:text-slate-300">
-                     <span className="font-medium break-words text-left max-w-[200px] sm:max-w-md">{locationName || `${stats.rxLat.toFixed(5)}, ${stats.rxLon.toFixed(5)}`}</span>
+                   <span className="flex flex-col text-slate-700 dark:text-slate-300 min-w-0">
+                     <span className="font-medium text-left truncate">{locationName || `${stats.rxLat.toFixed(5)}, ${stats.rxLon.toFixed(5)}`}</span>
                      {locationName && (
                        <span className="text-xs text-slate-500 font-normal">({stats.rxLat.toFixed(5)}, {stats.rxLon.toFixed(5)})</span>
                      )}
@@ -386,10 +403,10 @@ export function Dashboard({ stats, onReset }: DashboardProps) {
                  </span>
                </>
              )}
-           </p>
+           </div>
         </div>
         
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-row items-center gap-2 sm:gap-3 shrink-0 flex-wrap sm:flex-nowrap">
           <button 
             onClick={() => {
               if (stats.rxLat !== undefined) setExportConfig({ type: 'txt' });
@@ -422,7 +439,7 @@ export function Dashboard({ stats, onReset }: DashboardProps) {
           </button>
           <button 
             onClick={onReset}
-            className="text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-lg transition-colors shadow-sm whitespace-nowrap ml-2"
+            className="text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-lg transition-colors shadow-sm whitespace-nowrap"
           >
             {t('analyzeAnother')}
           </button>
@@ -535,7 +552,7 @@ export function Dashboard({ stats, onReset }: DashboardProps) {
             />
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300 select-none whitespace-nowrap">{t('compactView')}</span>
           </label>
-          <span className="hidden sm:inline text-sm font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1.5 ml-2"><ArrowDownUp className="w-4 h-4" /> {t('sortBy')}</span>
+          <span className="hidden sm:flex text-sm font-medium text-slate-500 dark:text-slate-400 items-center gap-1.5 ml-2"><ArrowDownUp className="w-4 h-4" /> {t('sortBy')}</span>
           <select 
             value={sortMode}
             onChange={(e) => setSortMode(e.target.value as any)}
@@ -562,41 +579,35 @@ export function Dashboard({ stats, onReset }: DashboardProps) {
       <hr className="border-slate-200 dark:border-slate-700/80 my-10" />
 
       {/* Map Section */}
-      {stats.rxLat !== undefined || stats.globalTransmitterCount > 0 ? (
-        <div className="space-y-4 mb-10">
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-2 gap-3">
-            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              {t('receptionMap')}
-            </h2>
-            <div className="flex items-center gap-3">
-              <button 
-                onClick={handleExportMapJPEG}
-                className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
-              >
-                <ImageIcon className="w-4 h-4" />
-                {t('exportMapJpeg')}
-              </button>
-              <label className="flex items-center gap-2 cursor-pointer bg-white dark:bg-[#313338] border border-slate-200 dark:border-slate-700/80 px-3 py-1.5 rounded-lg shadow-sm">
-                <input 
-                  type="checkbox" 
-                  checked={showMapLines} 
-                  onChange={(e) => setShowMapLines(e.target.checked)} 
-                  className="rounded border-slate-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50" 
-                />
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-300 select-none">{t('showLines')}</span>
-              </label>
-            </div>
-          </div>
-          <div ref={mapRef}>
-            <CoverageMap stats={stats} showLines={showMapLines} />
+      <div className="space-y-4 mb-10">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-2 gap-3">
+          <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+            {t('receptionMap')}
+          </h2>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={handleExportMapJPEG}
+              className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+            >
+              <ImageIcon className="w-4 h-4" />
+              {t('exportMapJpeg')}
+            </button>
+            <label className="flex items-center gap-2 cursor-pointer bg-white dark:bg-[#313338] border border-slate-200 dark:border-slate-700/80 px-3 py-1.5 rounded-lg shadow-sm">
+              <input 
+                type="checkbox" 
+                checked={showMapLines} 
+                onChange={(e) => setShowMapLines(e.target.checked)} 
+                className="rounded border-slate-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50" 
+              />
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300 select-none">{t('showLines')}</span>
+            </label>
           </div>
         </div>
-      ) : (
-        <div className="space-y-4 mb-10 text-center text-slate-500 py-10 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
-          <MapIcon className="w-12 h-12 mx-auto mb-3 text-slate-400 opacity-50" />
-          <p>{t('noGeodata')}</p>
+
+        <div ref={mapRef}>
+          <CoverageMap stats={stats} showLines={showMapLines} onUpdateStats={onUpdateStats} />
         </div>
-      )}
+      </div>
 
       {exportConfig && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">

@@ -57,7 +57,7 @@ export function generateTXT(stats: ScanStats, language: Language, includeLocatio
       lines.push(`     - [${tx.tii}] ${tx.location || unknownTxStr} (${t('distance')}: ${tx.distance.toFixed(1)} km, ${t('power')}: ${tx.power.toFixed(1)} kW) -> ${tx.level.toFixed(1)} dB`);
     });
 
-    if (mux.bestTransmitter) {
+    if (mux.transmitters.length > 1 && mux.bestTransmitter) {
       const unknownTxStr = language === 'fr' ? '[Site inconnu]' : '[Unknown site]';
       lines.push(`   > ${t('bestTx')}: ${mux.bestTransmitter.location || unknownTxStr} (${mux.bestTransmitter.level.toFixed(1)})`);
     }

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import { Mountain, X, Radio, RadioTower, Filter, Check } from 'lucide-react';
 import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import L from 'leaflet';
 import { ScanStats } from '../types';
 import { useAppContext } from '../contexts/AppContext';
+import { sortChannels } from '../lib/utils';
 
 import 'leaflet/dist/leaflet.css';
 
@@ -67,6 +68,17 @@ function MapPopupCloser() {
   return null;
 }
 
+function MapClickHandler({ onUpdateStats, rxCoords }: { onUpdateStats?: React.Dispatch<React.SetStateAction<ScanStats | null>>, rxCoords: [number, number] | null }) {
+  useMapEvents({
+    click(e) {
+      if (!rxCoords && onUpdateStats) {
+        onUpdateStats(prev => prev ? { ...prev, rxLat: e.latlng.lat, rxLon: e.latlng.lng } : null);
+      }
+    }
+  });
+  return null;
+}
+
 function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371; // Radius of the Earth in kilometers
   const dLat = deg2rad(lat2-lat1);
@@ -105,6 +117,7 @@ function ElevationProfile({ rxCoords, txCoords, location, onClose }: { rxCoords:
   const [rxHeight, setRxHeight] = useState('3');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [timeoutError, setTimeoutError] = useState(false);
   const { language } = useAppContext();
 
   useEffect(() => {
@@ -112,6 +125,14 @@ function ElevationProfile({ rxCoords, txCoords, location, onClose }: { rxCoords:
     const fetchProfile = async () => {
       setLoading(true);
       setError(false);
+      setTimeoutError(false);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+         if (active) {
+            setTimeoutError(true);
+            controller.abort();
+         }
+      }, 10000);
       try {
         const steps = 50;
         const lats = [];
@@ -122,16 +143,19 @@ function ElevationProfile({ rxCoords, txCoords, location, onClose }: { rxCoords:
           lons.push((rxCoords[1] + (txCoords[1] - rxCoords[1]) * f).toFixed(5));
         }
         
-        const res = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lats.join(',')}&longitude=${lons.join(',')}`);
+        const res = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lats.join(',')}&longitude=${lons.join(',')}`, { signal: controller.signal });
         if (!res.ok) throw new Error('API Error');
         const json = await res.json();
         
         if (active && json.elevation) {
           setRawData(json.elevation);
         }
-      } catch (err) {
-        if (active) setError(true);
+      } catch (err: any) {
+        if (active) {
+          if (err.name !== 'AbortError') setError(true);
+        }
       } finally {
+        clearTimeout(timeoutId);
         if (active) setLoading(false);
       }
     };
@@ -208,9 +232,17 @@ function ElevationProfile({ rxCoords, txCoords, location, onClose }: { rxCoords:
 
        <div className="p-4 h-52 bg-white dark:bg-[#313338] rounded-b-xl overflow-hidden" style={{ minHeight: '200px' }}>
          {loading ? (
-            <div className="h-full flex items-center justify-center text-slate-500 text-sm">Chargement...</div>
+            <div className="h-full flex items-center justify-center text-slate-500 text-sm">
+               {language === 'fr' ? 'Chargement...' : 'Loading...'}
+            </div>
+         ) : timeoutError ? (
+            <div className="h-full flex items-center justify-center text-red-500 text-sm text-center px-4">
+               {language === 'fr' ? 'La requête a pris trop de temps (plus de 10 secondes).' : 'The request took too long (more than 10 seconds).'}
+            </div>
          ) : error ? (
-            <div className="h-full flex items-center justify-center text-red-500 text-sm text-center">Erreur lors de la récupération des données</div>
+            <div className="h-full flex items-center justify-center text-red-500 text-sm text-center px-4">
+               {language === 'fr' ? 'La communication avec l\'API de calcul du profil topographique a échoué. Merci de réessayer ultérieurement.' : 'Communication with the elevation profile calculation API failed. Please try again later.'}
+            </div>
          ) : profileData ? (
             <ResponsiveContainer width="100%" height="100%" minHeight={200} minWidth={200}>
               <ComposedChart data={profileData.chartData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
@@ -222,14 +254,25 @@ function ElevationProfile({ rxCoords, txCoords, location, onClose }: { rxCoords:
                 </defs>
                 <XAxis dataKey="distance" type="number" textAnchor="end" tick={{fontSize: 10, fill: '#64748b'}} tickMargin={5} tickFormatter={(val) => `${val}km`} domain={['dataMin', 'dataMax']} tickCount={6} />
                 <YAxis tick={{fontSize: 10, fill: '#64748b'}} width={40} tickMargin={5} tickFormatter={(val) => `${val}m`} tickCount={5} />
-                <RechartsTooltip 
-                  labelFormatter={(val) => `${val} km`}
-                  formatter={(val: number, name: string) => [`${Math.round(val)} m`, name === 'elevation' ? 'Altitude' : 'Ligne de vue']}
-                  contentStyle={{ fontSize: '12px', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: '#ffffff', color: '#0f172a' }}
-                  itemStyle={{ color: '#3b82f6' }}
+                 <RechartsTooltip 
+                  content={({ active, payload, label }) => {
+                    if (active && payload && payload.length) {
+                      const elev = payload.find(p => p.dataKey === 'elevation');
+                      const los = payload.find(p => p.dataKey === 'lineOfSight');
+                      if (elev) {
+                        return (
+                          <div style={{ fontSize: '12px', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: '#ffffff', color: '#0f172a', padding: '10px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}>
+                            <p style={{ margin: 0, marginBottom: '5px', fontWeight: 600 }}>{label} km</p>
+                            <p style={{ margin: 0, color: '#3b82f6' }}>Altitude{language === 'fr' ? ' : ' : ': '}{Math.round(Number(elev.value))}m</p>
+                          </div>
+                        );
+                      }
+                    }
+                    return null;
+                  }}
                 />
                 <Area type="monotone" dataKey="elevation" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorElev)" />
-                <Line type="linear" dataKey="lineOfSight" stroke={profileData.hasObstruction ? '#ef4444' : '#4ade80'} strokeWidth={3} dot={false} strokeDasharray="4 4" />
+                <Line type="linear" dataKey="lineOfSight" stroke={profileData.hasObstruction ? '#ef4444' : '#4ade80'} strokeWidth={3} dot={false} strokeDasharray="4 4" activeDot={false} />
               </ComposedChart>
             </ResponsiveContainer>
          ) : null}
@@ -241,9 +284,10 @@ function ElevationProfile({ rxCoords, txCoords, location, onClose }: { rxCoords:
 interface CoverageMapProps {
   stats: ScanStats;
   showLines: boolean;
+  onUpdateStats?: React.Dispatch<React.SetStateAction<ScanStats | null>>;
 }
 
-export function CoverageMap({ stats, showLines }: CoverageMapProps) {
+export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProps) {
   const { t, language } = useAppContext();
   const [selectedTxForProfile, setSelectedTxForProfile] = useState<{lat: number, lon: number, location: string} | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -270,22 +314,12 @@ export function CoverageMap({ stats, showLines }: CoverageMapProps) {
   }, []);
 
   const sortedChannels = useMemo(() => {
-    return [...stats.multiplexes].sort((a, b) => {
-      const aMatch = a.channel.match(/(\d+)([a-zA-Z]*)/);
-      const bMatch = b.channel.match(/(\d+)([a-zA-Z]*)/);
-      if (aMatch && bMatch) {
-         const aNum = parseInt(aMatch[1], 10);
-         const bNum = parseInt(bMatch[1], 10);
-         if (aNum !== bNum) return aNum - bNum;
-         return (aMatch[2] || '').localeCompare(bMatch[2] || '');
-      }
-      return a.channel.localeCompare(b.channel);
-    });
+    return [...stats.multiplexes].sort((a, b) => sortChannels(a.channel, b.channel));
   }, [stats.multiplexes]);
 
   const { rxCoords, uniqueTransmitters, bounds } = useMemo(() => {
     let rxC: [number, number] | null = null;
-    if (stats.rxLat !== undefined && stats.rxLon !== undefined) {
+    if (stats.rxLat !== undefined && stats.rxLon !== undefined && !isNaN(stats.rxLat) && !isNaN(stats.rxLon)) {
       rxC = [stats.rxLat, stats.rxLon];
     }
 
@@ -298,7 +332,7 @@ export function CoverageMap({ stats, showLines }: CoverageMapProps) {
 
     stats.multiplexes.forEach(mux => {
       mux.transmitters.forEach(tx => {
-        if (tx.lat !== undefined && tx.lon !== undefined) {
+        if (tx.lat !== undefined && tx.lon !== undefined && !isNaN(tx.lat) && !isNaN(tx.lon)) {
           const key = `${tx.lat.toFixed(5)}_${tx.lon.toFixed(5)}`;
           if (!txMap.has(key)) {
             txMap.set(key, { lat: tx.lat, lon: tx.lon, location: tx.location, distance: tx.distance || 0, azimuth: tx.azimuth, muxData: [] });
@@ -320,7 +354,7 @@ export function CoverageMap({ stats, showLines }: CoverageMapProps) {
       if (hasSelectedMux) {
          filteredTxMap.set(key, {
            ...entry,
-           muxData: [...entry.muxData].sort((a: any, b: any) => a.channel.localeCompare(b.channel))
+           muxData: [...entry.muxData].sort((a: any, b: any) => sortChannels(a.channel, b.channel))
          });
          bnd.extend([entry.lat, entry.lon]);
       }
@@ -419,6 +453,7 @@ export function CoverageMap({ stats, showLines }: CoverageMapProps) {
 
       <MapContainer center={center} zoom={6} className="h-full w-full">
         <MapPopupCloser />
+        <MapClickHandler onUpdateStats={onUpdateStats} rxCoords={rxCoords} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

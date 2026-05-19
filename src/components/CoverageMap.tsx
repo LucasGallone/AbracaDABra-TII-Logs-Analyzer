@@ -237,7 +237,7 @@ function ElevationProfile({ rxCoords, txCoords, location, onClose }: { rxCoords:
             </div>
          ) : timeoutError ? (
             <div className="h-full flex items-center justify-center text-red-500 text-sm text-center px-4">
-               {language === 'fr' ? 'La requête a pris trop de temps (plus de 10 secondes).' : 'The request took too long (more than 10 seconds).'}
+               {language === 'fr' ? 'La communication avec l\'API de calcul du profil topographique a échoué. Merci de réessayer ultérieurement.' : 'Communication with the elevation profile calculation API failed. Please try again later.'}
             </div>
          ) : error ? (
             <div className="h-full flex items-center justify-center text-red-500 text-sm text-center px-4">

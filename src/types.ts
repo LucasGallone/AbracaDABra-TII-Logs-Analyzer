@@ -47,6 +47,7 @@ export interface ScanStats {
   timeZoneStr?: string;
   rxLat?: number;
   rxLon?: number;
+  rxLocationName?: string;
   channelCount: number;
   multiplexCount: number;
   globalTransmitterCount: number; // Unique locations

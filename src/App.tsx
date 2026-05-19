@@ -58,7 +58,7 @@ export default function App() {
         {!stats ? (
           <FileUpload onDataParsed={handleDataParsed} />
         ) : (
-          <Dashboard stats={stats} onReset={handleReset} />
+          <Dashboard stats={stats} onReset={handleReset} onUpdateStats={setStats} />
         )}
       </main>
     </div>

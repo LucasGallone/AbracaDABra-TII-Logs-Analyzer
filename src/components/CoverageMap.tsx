@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet';
-import { Mountain, X, Radio, RadioTower, Filter, Check } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents, LayersControl } from 'react-leaflet';
+import { Mountain, X, Radio, RadioTower, Filter, Check, Layers } from 'lucide-react';
 import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import L from 'leaflet';
 import { ScanStats } from '../types';
@@ -112,7 +112,7 @@ const ClassicRadioIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-function ElevationProfile({ rxCoords, txCoords, location, onClose }: { rxCoords: [number, number]; txCoords: [number, number]; location: string; onClose: () => void; }) {
+export function ElevationProfile({ rxCoords, txCoords, location, onClose }: { rxCoords: [number, number]; txCoords: [number, number]; location: string; onClose: () => void; }) {
   const [rawData, setRawData] = useState<number[] | null>(null);
   const [rxHeight, setRxHeight] = useState('3');
   const [loading, setLoading] = useState(true);
@@ -287,10 +287,39 @@ interface CoverageMapProps {
   onUpdateStats?: React.Dispatch<React.SetStateAction<ScanStats | null>>;
 }
 
+export const MAP_TILES = [
+  {
+    id: 'osm',
+    name: 'OpenStreetMap',
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  },
+  {
+    id: 'opentopo',
+    name: 'OpenTopoMap',
+    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, SRTM | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)'
+  },
+  {
+    id: 'carto_light',
+    name: 'CartoDB Positron',
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+  },
+  {
+    id: 'esri_satellite',
+    name: 'Esri Satellite',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri &mdash;; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+  }
+];
+
 export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProps) {
   const { t, language } = useAppContext();
   const [selectedTxForProfile, setSelectedTxForProfile] = useState<{lat: number, lon: number, location: string} | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [mapPickerOpen, setMapPickerOpen] = useState(false);
+  const [mapType, setMapType] = useState(MAP_TILES[0].id);
   const [selectedMuxKeys, setSelectedMuxKeys] = useState<Set<string>>(() => new Set(stats.multiplexes.map(m => m.channel)));
   const [forceShowAllMuxes, setForceShowAllMuxes] = useState(false);
 
@@ -323,7 +352,7 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
       rxC = [stats.rxLat, stats.rxLon];
     }
 
-    const txMap = new Map<string, { lat: number; lon: number; location: string; distance: number; azimuth?: number; muxData: { channel: string; label: string; tii: string; powerStr: string; }[] }>();
+    const txMap = new Map<string, { lat: number; lon: number; location: string; altitude?: number; distance: number; azimuth?: number; muxData: { channel: string; label: string; tii: string; powerStr: string; }[] }>();
     const bnd = new L.LatLngBounds([]);
 
     if (rxC) {
@@ -335,7 +364,7 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
         if (tx.lat !== undefined && tx.lon !== undefined && !isNaN(tx.lat) && !isNaN(tx.lon)) {
           const key = `${tx.lat.toFixed(5)}_${tx.lon.toFixed(5)}`;
           if (!txMap.has(key)) {
-            txMap.set(key, { lat: tx.lat, lon: tx.lon, location: tx.location, distance: tx.distance || 0, azimuth: tx.azimuth, muxData: [] });
+            txMap.set(key, { lat: tx.lat, lon: tx.lon, location: tx.location, altitude: tx.altitude, distance: tx.distance || 0, azimuth: tx.azimuth, muxData: [] });
           }
           const entry = txMap.get(key)!;
           // Add multiplex label if not already in list
@@ -389,17 +418,56 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
         />
       )}
       
-      <div className="absolute top-4 right-4 z-[1000] flex flex-col items-end export-hide">
-         <button 
-           onClick={() => setFilterOpen(!filterOpen)} 
-           className={`flex items-center gap-2 px-3 py-2 rounded-lg border shadow-md font-medium text-sm transition-colors ${filterOpen ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/50 dark:border-blue-800 dark:text-blue-300' : 'bg-white border-slate-200 text-slate-700 dark:bg-[#313338] dark:border-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-         >
-           <Filter className="w-4 h-4" />
-           {language === 'fr' ? 'Filtrer par multiplex' : 'Filter by multiplex'}
-         </button>
-         
-         {filterOpen && (
-           <div className="mt-2 w-64 max-h-80 overflow-y-auto bg-white dark:bg-[#313338] border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl pointer-events-auto">
+      <div className="absolute top-4 right-4 z-[1000] flex gap-2 items-start export-hide">
+         <div className="relative flex flex-col items-end">
+           <button 
+             onClick={() => {
+               setMapPickerOpen(!mapPickerOpen);
+               if (filterOpen) setFilterOpen(false);
+             }} 
+             className={`flex items-center justify-center w-10 h-10 rounded-lg border shadow-md font-medium text-sm transition-colors ${mapPickerOpen ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/50 dark:border-blue-800 dark:text-blue-300' : 'bg-white border-slate-200 text-slate-700 dark:bg-[#313338] dark:border-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+             title={language === 'fr' ? 'Changer de carte' : 'Change map layer'}
+           >
+             <Layers className="w-[18px] h-[18px]" />
+           </button>
+           
+           {mapPickerOpen && (
+             <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-[#313338] border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl pointer-events-auto overflow-hidden">
+               <div className="p-2 space-y-1">
+                 {MAP_TILES.map(tile => (
+                   <label key={tile.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-md cursor-pointer transition-colors group">
+                      <div className={`w-4 h-4 rounded-full border ${mapType === tile.id ? 'border-4 border-blue-500 bg-white' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 group-hover:border-blue-400'} flex items-center justify-center transition-colors shrink-0`} />
+                      <input 
+                        type="radio" 
+                        name="mapType"
+                        className="hidden"
+                        checked={mapType === tile.id} 
+                        onChange={() => setMapType(tile.id)} 
+                      />
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
+                        {tile.name}
+                      </span>
+                   </label>
+                 ))}
+               </div>
+             </div>
+           )}
+         </div>
+
+         <div className="relative flex flex-col items-end">
+           <button 
+             onClick={() => {
+               setFilterOpen(!filterOpen);
+               if (mapPickerOpen) setMapPickerOpen(false);
+             }} 
+             className={`flex items-center gap-2 px-3 h-10 rounded-lg border shadow-md font-medium text-sm transition-colors ${filterOpen ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/50 dark:border-blue-800 dark:text-blue-300' : 'bg-white border-slate-200 text-slate-700 dark:bg-[#313338] dark:border-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+           >
+             <Filter className="w-[18px] h-[18px]" />
+             {language === 'fr' ? 'Filtrer par multiplex' : 'Filter by multiplex'}
+           </button>
+           
+           {filterOpen && (
+             <div className="absolute top-full right-0 mt-2 w-64 max-h-80 overflow-y-auto bg-white dark:bg-[#313338] border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl pointer-events-auto">
              <div className="p-3 border-b border-slate-100 dark:border-slate-700/50 sticky top-0 bg-white dark:bg-[#313338] z-10">
                <label className="flex items-center gap-3 cursor-pointer group">
                   <div className={`w-5 h-5 rounded border ${selectedMuxKeys.size === sortedChannels.length ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 group-hover:border-blue-400'} flex items-center justify-center transition-colors`}>
@@ -449,14 +517,16 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
              </div>
            </div>
          )}
+        </div>
       </div>
 
       <MapContainer center={center} zoom={6} className="h-full w-full">
         <MapPopupCloser />
         <MapClickHandler onUpdateStats={onUpdateStats} rxCoords={rxCoords} />
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          key={mapType}
+          attribution={MAP_TILES.find(t => t.id === mapType)?.attribution || ''}
+          url={MAP_TILES.find(t => t.id === mapType)?.url || ''}
           crossOrigin="anonymous"
         />
         
@@ -474,12 +544,29 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
               <div className="min-w-[200px] sm:min-w-[240px] relative pb-1">
                 <div className="flex justify-between items-start mb-2 pr-8">
                   <div>
-                    <strong className="block text-slate-800 text-[13px] leading-tight">{tx.location || 'Émetteur'}</strong>
-                    <span className="text-[11px] text-slate-500 font-medium">
-                      {language === 'fr' 
-                        ? `Distance : ${tx.distance > 0 ? tx.distance.toFixed(1) + ' km' : 'N/A'}${tx.azimuth !== undefined ? ` - Azimut : ${Math.round(tx.azimuth)}°` : ''}` 
-                        : `Distance: ${tx.distance > 0 ? tx.distance.toFixed(1) + ' km' : 'N/A'}${tx.azimuth !== undefined ? ` - Azimuth: ${Math.round(tx.azimuth)}°` : ''}`}
-                    </span>
+                    {tx.location ? (
+                      <strong className="block text-slate-800 dark:text-slate-200 text-[13px] leading-tight flex items-center gap-1.5">
+                         {tx.location}
+                      </strong>
+                    ) : (
+                      <strong className="text-orange-600 dark:text-orange-500 font-bold text-[13px] leading-tight">
+                        {language === 'fr' ? 'Site inconnu !' : 'Unknown site!'}
+                      </strong>
+                    )}
+                    <div className="flex flex-col gap-0.5 mt-1.5">
+                      <span className="text-[11px] text-slate-500 font-medium">
+                        {language === 'fr' 
+                          ? `Distance : ${tx.distance > 0 ? tx.distance.toFixed(1) + ' km' : 'N/A'}` 
+                          : `Distance: ${tx.distance > 0 ? tx.distance.toFixed(1) + ' km' : 'N/A'}`}
+                      </span>
+                      {(tx.altitude !== undefined && tx.altitude !== -1) || tx.azimuth !== undefined ? (
+                        <span className="text-[11px] text-slate-500 font-medium">
+                          {tx.altitude !== undefined && tx.altitude !== -1 ? (language === 'fr' ? `Altitude : ${Math.round(tx.altitude)}m` : `Altitude: ${Math.round(tx.altitude)}m`) : ''}
+                          {tx.altitude !== undefined && tx.altitude !== -1 && tx.azimuth !== undefined ? ' - ' : ''}
+                          {tx.azimuth !== undefined ? (language === 'fr' ? `Azimut : ${Math.round(tx.azimuth)}°` : `Azimuth: ${Math.round(tx.azimuth)}°`) : ''}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
                 {rxCoords && (

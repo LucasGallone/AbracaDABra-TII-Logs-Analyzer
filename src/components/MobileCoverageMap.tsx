@@ -293,7 +293,7 @@ export function MobileCoverageMap({
                  setMapPickerOpen(!mapPickerOpen);
                }} 
                className={`flex items-center justify-center w-8 h-8 bg-white dark:bg-slate-800 border-2 border-[rgba(0,0,0,0.2)] dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors`}
-               title={t('filter')}
+               title={t('mapModelSelection')}
              >
                <Layers className="w-[18px] h-[18px]" />
              </button>
@@ -413,7 +413,7 @@ export function MobileCoverageMap({
               />
             );
           })}
-          <MapEventHandler onClick={() => { setSelectedPoint(null); setActiveLine(null); }} />
+          <MapEventHandler onClick={() => { setSelectedPoint(null); setActiveLine(null); setMapPickerOpen(false); setIsMuxDropdownOpen(false); }} />
         </MapContainer>
         </div>
 

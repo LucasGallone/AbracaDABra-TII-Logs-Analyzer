@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { format } from 'date-fns';
 import { fr, enUS } from 'date-fns/locale';
-import { Activity, MapPin, Radio, Signal, AlertCircle, FileText, Download, Map as MapIcon, List, ArrowDownUp, Image as ImageIcon } from 'lucide-react';
+import { Activity, MapPin, Radio, Signal, AlertCircle, FileText, Download, Map as MapIcon, List, ArrowDownUp, Image as ImageIcon, Mountain } from 'lucide-react';
 import { ScanStats, MultiplexStat } from '../types';
 import { useAppContext } from '../contexts/AppContext';
 import { generatePDF, generateTXT } from '../lib/export';
@@ -103,7 +103,11 @@ const MultiplexCard: React.FC<{ mux: MultiplexStat, compact?: boolean }> = ({ mu
                           {tx.tii}
                         </span>
                         <span className="truncate text-slate-700 dark:text-slate-200 font-medium flex-1 min-w-0" title={tx.location || t('unknownSite')}>
-                          {tx.location || t('unknownSite')}
+                          {tx.location ? tx.location : (
+                            <span className="text-orange-600 dark:text-orange-500 font-semibold">
+                              {t('unknownSite')}
+                            </span>
+                          )}
                         </span>
                      </div>
                      <div className="flex items-center gap-2 shrink-0 ml-2">
@@ -113,6 +117,9 @@ const MultiplexCard: React.FC<{ mux: MultiplexStat, compact?: boolean }> = ({ mu
                            )}
                            {(tx.power > 0) && (
                              <span className="text-slate-500 dark:text-slate-400 whitespace-nowrap">{tx.power.toFixed(1)} kW</span>
+                           )}
+                           {tx.altitude !== undefined && tx.altitude !== -1 && (
+                             <span className="text-emerald-700 dark:text-emerald-400 whitespace-nowrap">{language === 'fr' ? 'Altitude :' : 'Altitude:'} {Math.round(tx.altitude)}m</span>
                            )}
                         </div>
                         <span className="font-mono text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap w-12 text-right">{tx.level.toFixed(1)}</span>
@@ -190,17 +197,29 @@ const MultiplexCard: React.FC<{ mux: MultiplexStat, compact?: boolean }> = ({ mu
                         {tx.tii}
                       </span>
                       <span className={`truncate text-slate-700 dark:text-slate-200 font-medium ${compact ? 'text-xs' : ''} pb-1 flex-1 min-w-0`} title={tx.location || t('unknownSite')}>
-                        {tx.location || t('unknownSite')}
+                        {tx.location ? tx.location : (
+                            <span className="text-orange-600 dark:text-orange-500 font-semibold">
+                              {t('unknownSite')}
+                            </span>
+                        )}
                       </span>
                     </div>
                     {!compact && (
-                      <div className="flex flex-wrap gap-2 text-xs mt-0.5">
-                         {(tx.distance > 0) && (
-                           <span className="font-medium text-blue-700 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded whitespace-nowrap">{t('distance')} : {tx.distance.toFixed(1)} km</span>
-                         )}
-                         {(tx.power > 0) && (
-                           <span className="font-medium text-slate-600 dark:text-slate-400 bg-slate-200/50 dark:bg-slate-800/50 px-1.5 py-0.5 rounded whitespace-nowrap">{t('power')} : {tx.power.toFixed(1)} kW</span>
-                         )}
+                      <div className="flex flex-col gap-1.5 mt-1">
+                        <div className="flex flex-wrap gap-2 text-xs">
+                           {(tx.distance > 0) && (
+                             <span className="font-medium text-blue-700 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded whitespace-nowrap">{t('distance')} : {tx.distance.toFixed(1)} km</span>
+                           )}
+                           {(tx.power > 0) && (
+                             <span className="font-medium text-slate-600 dark:text-slate-400 bg-slate-200/50 dark:bg-slate-800/50 px-1.5 py-0.5 rounded whitespace-nowrap">{t('power')} : {tx.power.toFixed(1)} kW</span>
+                           )}
+                        </div>
+                        {tx.altitude !== undefined && tx.altitude !== -1 && (
+                          <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
+                            <Mountain className="w-3.5 h-3.5" />
+                            <span>{language === 'fr' ? 'Altitude :' : 'Altitude:'} {Math.round(tx.altitude)}m</span>
+                          </div>
+                        )}
                       </div>
                     )}
                  </div>

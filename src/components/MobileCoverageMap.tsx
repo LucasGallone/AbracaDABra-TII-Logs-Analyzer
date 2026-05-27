@@ -6,6 +6,7 @@ import { useAppContext } from '../contexts/AppContext';
 import { Layers, Navigation, X, Maximize2, Minimize2, LocateFixed, ChevronDown } from 'lucide-react';
 import L from 'leaflet';
 import { ElevationProfile, MAP_TILES } from './CoverageMap';
+import { sortChannels } from '../lib/utils';
 import { format } from 'date-fns';
 import { enUS, fr } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'motion/react';
@@ -198,7 +199,11 @@ export function MobileCoverageMap({
                   transition={{ duration: 0.15 }}
                   className="absolute top-10 left-0 min-w-[280px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl shadow-xl z-[1002] py-2 max-h-[300px] overflow-y-auto custom-scrollbar"
                 >
-                  {allMultiplexes.map(m => {
+                  {[...allMultiplexes].sort((a, b) => {
+                    const cmp = sortChannels(a.channel, b.channel);
+                    if (cmp !== 0) return cmp;
+                    return (a.label || '').localeCompare(b.label || '');
+                  }).map(m => {
                     const isSelected = m.channel === multiplex.channel && m.label === multiplex.label;
                     return (
                       <button

@@ -30,6 +30,7 @@ export interface Transmitter {
   azimuth?: number;
   lat?: number;
   lon?: number;
+  altitude?: number;
 }
 
 export interface MultiplexStat {
@@ -55,4 +56,54 @@ export interface ScanStats {
   furthestTransmitter: Transmitter | null;
   closestTransmitter: Transmitter | null;
   multiplexes: MultiplexStat[];
+}
+
+export interface MobilePointTransmitter {
+  tii: string;
+  location: string;
+  level: number;
+  power: number;
+  distance: number;
+  lat?: number;
+  lon?: number;
+}
+
+export interface MobilePoint {
+  lat: number;
+  lon: number;
+  snr: number;
+  timeMs?: number;
+  transmitters: MobilePointTransmitter[]; // All transmitters received at this specific point
+}
+
+export interface MobileTransmitterStat {
+  tii: string;
+  location: string;
+  power: number;
+  lat?: number;
+  lon?: number;
+  altitude?: number;
+  pointCount: number;
+  minLevel: number;
+  maxLevel: number;
+  minDistance: number;
+  maxDistance: number;
+}
+
+export interface MobileMultiplexStat {
+  label: string;
+  channel: string;
+  frequency: number;
+  eid: string;
+  points: MobilePoint[];
+  transmitters: MobileTransmitterStat[]; // Summary of all transmitters
+  maxSnr: number;
+}
+
+export interface MobileScanStats {
+  startTime: Date;
+  timeZoneStr?: string;
+  channelCount: number;
+  multiplexCount: number;
+  multiplexes: MobileMultiplexStat[];
 }

@@ -51,12 +51,23 @@ function getMapLevelColor(level: number) {
   return "#991b1b"; // dark red
 }
 
-function MapEventHandler({ onClick }: { onClick: () => void }) {
-  useMapEvents({ click: (e) => {
-     const origEvent = e.originalEvent as any;
-     if (origEvent && (origEvent._stopped || origEvent.defaultPrevented)) return;
-     onClick();
-  }});
+function MapEventHandler({ onClick, onZoom }: { onClick: () => void, onZoom?: (zoom: number) => void }) {
+  const map = useMapEvents({ 
+    click: (e) => {
+       const origEvent = e.originalEvent as any;
+       if (origEvent && (origEvent._stopped || origEvent.defaultPrevented)) return;
+       onClick();
+    },
+    zoom: () => {
+       if (onZoom) onZoom(map.getZoom());
+    },
+    zoomend: () => {
+       if (onZoom) onZoom(map.getZoom());
+    }
+  });
+  useEffect(() => {
+    if (onZoom) onZoom(map.getZoom());
+  }, [map, onZoom]);
   return null;
 }
 
@@ -90,6 +101,7 @@ export function MobileCoverageMap({
   const [isMuxDropdownOpen, setIsMuxDropdownOpen] = useState(false);
   const [mapPickerOpen, setMapPickerOpen] = useState(false);
   const [mapType, setMapType] = useState(MAP_TILES[0].id);
+  const [mapZoom, setMapZoom] = useState(10);
   const [topoProps, setTopoProps] = useState<{ rxCoords: [number, number], txCoords: [number, number], location: string } | null>(null);
   const prevViewRef = useRef<{ center: L.LatLng, zoom: number } | null>(null);
   
@@ -399,10 +411,10 @@ export function MobileCoverageMap({
               
               return (
               <CircleMarker
-                key={`${p.lat}-${p.lon}-${colorMode}-${selectedTx || 'all'}`}
+                key={`${p.lat}-${p.lon}-${colorMode}-${selectedTx || 'all'}-${mapZoom >= 13}`}
                 center={[p.lat, p.lon]}
                 radius={7} 
-                pathOptions={{ fillColor: fillColor, color: 'rgba(0,0,0,0.5)', weight: 1.5, stroke: true, fillOpacity: 0.9 }}
+                pathOptions={{ fillColor: fillColor, color: 'rgba(0,0,0,0.5)', weight: mapZoom >= 13 ? 1.5 : 0, stroke: mapZoom >= 13, fillOpacity: 0.9 }}
                 eventHandlers={{ click: (e) => {
                    if (e && e.originalEvent) {
                      L.DomEvent.stopPropagation(e.originalEvent);
@@ -413,7 +425,7 @@ export function MobileCoverageMap({
               />
             );
           })}
-          <MapEventHandler onClick={() => { setSelectedPoint(null); setActiveLine(null); setMapPickerOpen(false); setIsMuxDropdownOpen(false); }} />
+          <MapEventHandler onClick={() => { setSelectedPoint(null); setActiveLine(null); setMapPickerOpen(false); setIsMuxDropdownOpen(false); }} onZoom={(z) => setMapZoom(z)} />
         </MapContainer>
         </div>
 

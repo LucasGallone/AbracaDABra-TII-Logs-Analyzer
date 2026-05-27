@@ -84,7 +84,7 @@ export function MobileCoverageMap({
   const { t, theme, language } = useAppContext();
   const dateLocale = language === 'fr' ? fr : enUS;
   const [selectedTx, setSelectedTx] = useState<string | null>(null);
-  const [colorMode, setColorMode] = useState<'snr' | 'level'>('level');
+  const [colorMode, setColorMode] = useState<'snr' | 'level'>('snr');
   const [activeLine, setActiveLine] = useState<{ pointLat: number, pointLon: number, txLat: number, txLon: number } | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<(MobilePoint & { renderColor: string, txData: any }) | null>(null);
   const [isMuxDropdownOpen, setIsMuxDropdownOpen] = useState(false);
@@ -219,6 +219,7 @@ export function MobileCoverageMap({
                 setSelectedTx(e.target.value || null);
                 setActiveLine(null);
                 setSelectedPoint(null);
+                setColorMode('snr');
               }}
             >
               <option value="">{t('allPointsSnr')}</option>

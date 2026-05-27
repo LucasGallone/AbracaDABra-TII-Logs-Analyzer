@@ -71,6 +71,7 @@ function MapPopupCloser() {
 function MapClickHandler({ onUpdateStats, rxCoords }: { onUpdateStats?: React.Dispatch<React.SetStateAction<ScanStats | null>>, rxCoords: [number, number] | null }) {
   useMapEvents({
     click(e) {
+      window.dispatchEvent(new CustomEvent('close-map-popups'));
       if (!rxCoords && onUpdateStats) {
         onUpdateStats(prev => prev ? { ...prev, rxLat: e.latlng.lat, rxLon: e.latlng.lng } : null);
       }
@@ -320,12 +321,13 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
   const [filterOpen, setFilterOpen] = useState(false);
   const [mapPickerOpen, setMapPickerOpen] = useState(false);
   const [mapType, setMapType] = useState(MAP_TILES[0].id);
-  const [selectedMuxKeys, setSelectedMuxKeys] = useState<Set<string>>(() => new Set(stats.multiplexes.map(m => m.channel)));
+  const [selectedMuxKeys, setSelectedMuxKeys] = useState<Set<string>>(() => new Set(stats.multiplexes.map(m => `${m.channel}-${m.label}`)));
   const [forceShowAllMuxes, setForceShowAllMuxes] = useState(false);
 
   useEffect(() => {
     const handleCloseEvents = () => {
       setFilterOpen(false);
+      setMapPickerOpen(false);
       setSelectedTxForProfile(null);
     };
     const handleForceShow = () => setForceShowAllMuxes(true);
@@ -343,7 +345,11 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
   }, []);
 
   const sortedChannels = useMemo(() => {
-    return [...stats.multiplexes].sort((a, b) => sortChannels(a.channel, b.channel));
+    return [...stats.multiplexes].sort((a, b) => {
+      const cmp = sortChannels(a.channel, b.channel);
+      if (cmp !== 0) return cmp;
+      return (a.label || '').localeCompare(b.label || '');
+    });
   }, [stats.multiplexes]);
 
   const { rxCoords, uniqueTransmitters, bounds } = useMemo(() => {
@@ -369,7 +375,7 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
           const entry = txMap.get(key)!;
           // Add multiplex label if not already in list
           const powerStr = tx.power > 0 ? tx.power.toFixed(1) : '0';
-          if (!entry.muxData.some((m: any) => m.channel === mux.channel)) {
+          if (!entry.muxData.some((m: any) => m.channel === mux.channel && m.label === mux.label)) {
             entry.muxData.push({ channel: mux.channel, label: mux.label, tii: tx.tii, powerStr });
           }
         }
@@ -379,7 +385,7 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
     const filteredTxMap = new Map<string, any>();
     txMap.forEach((entry, key) => {
       // Check if the TX has any of the selected multiplexes
-      const hasSelectedMux = forceShowAllMuxes || entry.muxData.some((m: any) => selectedMuxKeys.has(m.channel));
+      const hasSelectedMux = forceShowAllMuxes || entry.muxData.some((m: any) => selectedMuxKeys.has(`${m.channel}-${m.label}`));
       if (hasSelectedMux) {
          filteredTxMap.set(key, {
            ...entry,
@@ -426,7 +432,7 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
                if (filterOpen) setFilterOpen(false);
              }} 
              className={`flex items-center justify-center w-10 h-10 rounded-lg border shadow-md font-medium text-sm transition-colors ${mapPickerOpen ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/50 dark:border-blue-800 dark:text-blue-300' : 'bg-white border-slate-200 text-slate-700 dark:bg-[#313338] dark:border-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-             title={language === 'fr' ? 'Changer de carte' : 'Change map layer'}
+             title={t('mapModelSelection')}
            >
              <Layers className="w-[18px] h-[18px]" />
            </button>
@@ -481,7 +487,7 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
                       if (selectedMuxKeys.size === sortedChannels.length) {
                         setSelectedMuxKeys(new Set());
                       } else {
-                        setSelectedMuxKeys(new Set(sortedChannels.map(m => m.channel)));
+                        setSelectedMuxKeys(new Set(sortedChannels.map(m => `${m.channel}-${m.label}`)));
                       }
                     }} 
                   />
@@ -492,19 +498,20 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
              </div>
              <div className="p-2 space-y-1">
                {sortedChannels.map(mux => (
-                 <label key={mux.channel} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-md cursor-pointer transition-colors group">
-                    <div className={`w-5 h-5 rounded border ${selectedMuxKeys.has(mux.channel) ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 group-hover:border-blue-400'} flex items-center justify-center transition-colors shrink-0`}>
-                      {selectedMuxKeys.has(mux.channel) && <Check className="w-3.5 h-3.5" />}
+                 <label key={`${mux.channel}-${mux.label}`} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-md cursor-pointer transition-colors group">
+                    <div className={`w-5 h-5 rounded border ${selectedMuxKeys.has(`${mux.channel}-${mux.label}`) ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 group-hover:border-blue-400'} flex items-center justify-center transition-colors shrink-0`}>
+                      {selectedMuxKeys.has(`${mux.channel}-${mux.label}`) && <Check className="w-3.5 h-3.5" />}
                     </div>
                     <input 
                       type="checkbox" 
                       className="hidden"
-                      checked={selectedMuxKeys.has(mux.channel)} 
+                      checked={selectedMuxKeys.has(`${mux.channel}-${mux.label}`)} 
                       onChange={() => {
                         setSelectedMuxKeys(prev => {
                           const next = new Set(prev);
-                          if (next.has(mux.channel)) next.delete(mux.channel);
-                          else next.add(mux.channel);
+                          const mKey = `${mux.channel}-${mux.label}`;
+                          if (next.has(mKey)) next.delete(mKey);
+                          else next.add(mKey);
                           return next;
                         });
                       }} 

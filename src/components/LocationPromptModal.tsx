@@ -49,7 +49,6 @@ export function LocationPromptModal({ onApply, onSkip, stats }: LocationPromptPr
           setReusedLocation(true);
         }
       } catch (e) {
-        // ignore
       }
     }
   }, []);

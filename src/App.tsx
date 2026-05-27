@@ -1,27 +1,62 @@
 import { useState } from 'react';
 import { FileUpload } from './components/FileUpload';
 import { Dashboard } from './components/Dashboard';
-import { parseDABData } from './lib/parser';
-import { RawDABRow, ScanStats } from './types';
+import { MobileDashboard } from './components/MobileDashboard';
+import { ScanTypeModal } from './components/ScanTypeModal';
+import { parseDABData, parseMobileDABData, enrichWithAltitudes } from './lib/parser';
+import { RawDABRow, ScanStats, MobileScanStats } from './types';
 import { useAppContext } from './contexts/AppContext';
 import { Moon, Sun, Languages } from 'lucide-react';
 
 export default function App() {
   const [stats, setStats] = useState<ScanStats | null>(null);
+  const [mobileStats, setMobileStats] = useState<MobileScanStats | null>(null);
+  const [rawData, setRawData] = useState<RawDABRow[] | null>(null);
+  const [showTypeModal, setShowTypeModal] = useState(false);
   const { theme, toggleTheme, language, toggleLanguage, t } = useAppContext();
 
   const handleDataParsed = (data: RawDABRow[]) => {
-    const parsedStats = parseDABData(data);
-    setStats(parsedStats);
+    setRawData(data);
+    setShowTypeModal(true);
+  };
+
+  const handleScanTypeSelect = (type: 'fixed' | 'mobile') => {
+    setShowTypeModal(false);
+    if (!rawData) return;
+    
+    if (type === 'fixed') {
+      const parsedStats = parseDABData(rawData);
+      if (parsedStats) {
+        setStats(parsedStats);
+        enrichWithAltitudes(parsedStats, false).then(() => {
+          setStats({ ...parsedStats });
+        });
+      }
+    } else {
+      const parsedMobileStats = parseMobileDABData(rawData);
+      if (parsedMobileStats) {
+        setMobileStats(parsedMobileStats);
+        enrichWithAltitudes(parsedMobileStats, true).then(() => {
+          setMobileStats({ ...parsedMobileStats });
+        });
+      }
+    }
+  };
+
+  const handleModalClose = () => {
+    setShowTypeModal(false);
+    setRawData(null);
   };
 
   const handleReset = () => {
     setStats(null);
+    setMobileStats(null);
+    setRawData(null);
   };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#2B2D31] font-sans text-slate-900 dark:text-slate-100 selection:bg-blue-100 dark:selection:bg-blue-900 selection:text-blue-900 dark:selection:text-blue-100 transition-colors">
-      <header className="bg-white dark:bg-[#1E1F22] border-b border-slate-200 dark:border-slate-800/80 sticky top-0 z-10 shadow-sm transition-colors">
+      <header className="bg-white dark:bg-[#1E1F22] border-b border-slate-200 dark:border-slate-800/80 sticky top-0 z-[9999] shadow-sm transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
            <div className="flex items-center gap-2">
              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-md">
@@ -55,12 +90,20 @@ export default function App() {
       </header>
 
       <main className="flex-1 flex flex-col justify-center min-h-[calc(100vh-4rem)]">
-        {!stats ? (
+        {!stats && !mobileStats ? (
           <FileUpload onDataParsed={handleDataParsed} />
-        ) : (
+        ) : stats ? (
           <Dashboard stats={stats} onReset={handleReset} onUpdateStats={setStats} />
-        )}
+        ) : mobileStats ? (
+          <MobileDashboard stats={mobileStats} onReset={handleReset} />
+        ) : null}
       </main>
+
+      <ScanTypeModal 
+        isOpen={showTypeModal} 
+        onSelect={handleScanTypeSelect} 
+        onClose={handleModalClose} 
+      />
     </div>
   );
 }

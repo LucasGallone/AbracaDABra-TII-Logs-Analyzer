@@ -2,14 +2,16 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @keyframes sfn-ping {
-  0% { stroke-width: 2; stroke-opacity: 0.8; }
-  50% { stroke-width: 12; stroke-opacity: 0.2; }
-  100% { stroke-width: 2; stroke-opacity: 0.8; }
+  0% { transform: scale(1); stroke-opacity: 0.8; }
+  50% { transform: scale(2.5); stroke-opacity: 0.2; }
+  100% { transform: scale(1); stroke-opacity: 0.8; }
 }
 
 .sfn-pulse {
   animation: sfn-ping 1.5s infinite ease-in-out;
   stroke: #ef4444 !important; /* Red color stroke for SFN conflicts */
+  transform-origin: center;
+  transform-box: fill-box;
 }
 
 .export-mode .leaflet-control-zoom,

@@ -766,26 +766,40 @@ export function MobileCoverageMap({
               const fillColor = isSelected ? '#a855f7' : p.renderColor;
               
               return (
-              <CircleMarker
-                key={`${p.lat}-${p.lon}-${colorMode}-${selectedTx || 'all'}-${mapZoom >= 13}-${p.hasSfnConflict}`}
-                center={[p.lat, p.lon]}
-                radius={7} 
-                pathOptions={{ 
-                  fillColor: fillColor, 
-                  color: p.hasSfnConflict ? '#ef4444' : 'rgba(0,0,0,0.5)', 
-                  weight: p.hasSfnConflict ? 3 : (mapZoom >= 13 ? 1.5 : 0), 
-                  stroke: p.hasSfnConflict || mapZoom >= 13, 
-                  fillOpacity: 0.9,
-                  className: p.hasSfnConflict ? 'sfn-pulse' : undefined
-                }}
-                eventHandlers={{ click: (e) => {
-                   if (e && e.originalEvent) {
-                     L.DomEvent.stopPropagation(e.originalEvent);
-                     (e.originalEvent as any)._stopped = true;
-                   }
-                   setSelectedPoint(p);
-                } }}
-              />
+              <React.Fragment key={`${p.lat}-${p.lon}-${colorMode}-${selectedTx || 'all'}-${mapZoom >= 13}-${p.hasSfnConflict}`}>
+                <CircleMarker
+                  center={[p.lat, p.lon]}
+                  radius={7} 
+                  pathOptions={{ 
+                    fillColor: fillColor, 
+                    color: 'rgba(0,0,0,0.5)', 
+                    weight: mapZoom >= 13 ? 1.5 : 0, 
+                    stroke: mapZoom >= 13, 
+                    fillOpacity: 0.9
+                  }}
+                  eventHandlers={{ click: (e) => {
+                     if (e && e.originalEvent) {
+                       L.DomEvent.stopPropagation(e.originalEvent);
+                       (e.originalEvent as any)._stopped = true;
+                     }
+                     setSelectedPoint(p);
+                  } }}
+                />
+                {p.hasSfnConflict && (
+                   <CircleMarker
+                     center={[p.lat, p.lon]}
+                     radius={8}
+                     interactive={false}
+                     pathOptions={{
+                       fill: false,
+                       color: '#ef4444',
+                       weight: 3,
+                       stroke: true,
+                       className: 'sfn-pulse-stroke'
+                     }}
+                   />
+                )}
+              </React.Fragment>
             );
           })}
           <MapEventHandler onClick={() => { setSelectedPoint(null); setActiveLine(null); setMapPickerOpen(false); setIsMuxDropdownOpen(false); }} onZoom={(z) => setMapZoom(z)} />

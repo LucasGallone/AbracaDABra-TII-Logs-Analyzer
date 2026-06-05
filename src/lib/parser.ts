@@ -19,10 +19,19 @@ export function parseMobileDABData(data: RawDABRow[]): MobileScanStats | null {
         timeZoneStr = `[${tz}]`;
       }
     }
-    dates = validData.map(r => new Date(r[timeKey]).getTime()).filter(t => !isNaN(t));
-    if (dates.length > 0) {
-      startTime = new Date(Math.min(...dates));
-    }
+  }
+  
+  // Sort data chronologically to support combination of multiple CSV files
+  validData.sort((a, b) => {
+    const timeA = new Date(a[timeKey]).getTime();
+    const timeB = new Date(b[timeKey]).getTime();
+    if (isNaN(timeA) || isNaN(timeB)) return 0;
+    return timeA - timeB;
+  });
+
+  dates = validData.map(r => new Date(r[timeKey]).getTime()).filter(t => !isNaN(t));
+  if (dates.length > 0) {
+    startTime = new Date(Math.min(...dates));
   }
 
   const muxPointsMap = new Map<string, Map<string, MobilePoint>>();

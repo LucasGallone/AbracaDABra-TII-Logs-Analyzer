@@ -685,7 +685,7 @@ export function MobileCoverageMap({
                       </div>
                       <div className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-400">
                         {tx.maxDistance > 0 && (
-                          <div><span className="font-medium text-slate-500">{t('distanceField')}</span> <span className="font-medium text-slate-800 dark:text-slate-200">{tx.minDistance.toFixed(1)} - {tx.maxDistance.toFixed(1)} km</span></div>
+                          <div><span className="font-medium text-slate-500">{t('distanceField')}</span> <span className="font-medium text-slate-800 dark:text-slate-200">{tx.minDistance.toFixed(1)} -&gt; {tx.maxDistance.toFixed(1)} km</span></div>
                         )}
                         {tx.power > 0 && (
                           <div><span className="font-medium text-slate-500">{t('erpPowerField')}</span> <span className="font-medium text-slate-800 dark:text-slate-200">{tx.power.toFixed(1)} kW</span></div>

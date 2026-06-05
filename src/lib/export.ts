@@ -227,7 +227,7 @@ export function generatePDF(stats: ScanStats, language: Language, mapImg?: { url
     doc.line(14, currentY, 196, currentY);
     currentY += 10;
 
-    // Check if we need a new page for map
+    // Check if we need a new page for the map
     if (currentY + 100 > 280) {
       doc.addPage();
       currentY = 20;
@@ -253,7 +253,6 @@ export function generatePDF(stats: ScanStats, language: Language, mapImg?: { url
   currentY += 10;
 
   stats.multiplexes.forEach(mux => {
-    // Check if we need a new page
     if (currentY > 250) {
       doc.addPage();
       currentY = 20;

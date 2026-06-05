@@ -19,7 +19,6 @@ export const transformColumnHeader = (header: string, index?: number): string =>
 
   // Pre-defined mapping
   const headerMap: Record<string, string> = {
-    // Channel
     'kanál': 'Channel',
     'kanal': 'Channel',
     'canale': 'Channel',
@@ -27,7 +26,6 @@ export const transformColumnHeader = (header: string, index?: number): string =>
     'canal': 'Channel',
     'channel': 'Channel',
 
-    // Frequency
     'frekvence [khz]': 'Frequency [kHz]',
     'frequenz [khz]': 'Frequency [kHz]',
     'frequenza [khz]': 'Frequency [kHz]',
@@ -35,33 +33,27 @@ export const transformColumnHeader = (header: string, index?: number): string =>
     'fréquence [khz]': 'Frequency [kHz]',
     'frequency [khz]': 'Frequency [kHz]',
 
-    // UEID
     'ueid': 'UEID',
     'identyfikator ue': 'UEID',
 
-    // Label
     'název': 'Label',
     'label': 'Label',
     'mux': 'Label',
     'etykieta': 'Label',
     'nom': 'Label',
 
-    // SNR 
     'snr [db]': 'SNR [dB]',
 
-    // Main
     'main': 'Main',
     'stazione': 'Main',
     'główny': 'Main',
     'principal': 'Main',
 
-    // Sub
     'sub': 'Sub',
     'sottostazione': 'Sub',
     'pod': 'Sub',
     'sous': 'Sub',
 
-    // Level
     'úroveň [db]': 'Level [dB]',
     'feldstärke [db]': 'Level [dB]',
     'livello [db]': 'Level [dB]',
@@ -69,7 +61,6 @@ export const transformColumnHeader = (header: string, index?: number): string =>
     'niveau [db]': 'Level [dB]',
     'level [db]': 'Level [dB]',
 
-    // Location
     'umístění': 'Location',
     'standort': 'Location',
     'postazione': 'Location',
@@ -77,7 +68,6 @@ export const transformColumnHeader = (header: string, index?: number): string =>
     'emplacement': 'Location',
     'location': 'Location',
 
-    // Power
     'výkon [kw]': 'Power [kW]',
     'leistung [kw]': 'Power [kW]',
     'potenza [kw]': 'Power [kW]',
@@ -85,20 +75,17 @@ export const transformColumnHeader = (header: string, index?: number): string =>
     'puissance [kw]': 'Power [kW]',
     'power [kw]': 'Power [kW]',
 
-    // Distance
     'vzdálenost [km]': 'Distance [km]',
     'entfernung [km]': 'Distance [km]',
     'distanza [km]': 'Distance [km]',
     'dystans [km]': 'Distance [km]',
     'distance [km]': 'Distance [km]',
 
-    // Azimuth
     'azimut [°]': 'Azimuth [deg]',
     'azimut [deg]': 'Azimuth [deg]',
     'azimuth [deg]': 'Azimuth [deg]',
     'azymut [st.]': 'Azimuth [deg]',
     
-    // Lat/Lon (TX)
     'zem. šířka (tx)': 'Latitude (TX)',
     'breitenkreis (tx)': 'Latitude (TX)',
     'latitudine (tx)': 'Latitude (TX)',
@@ -111,7 +98,6 @@ export const transformColumnHeader = (header: string, index?: number): string =>
     'długość geograficzna (tx)': 'Longitude (TX)',
     'longitude (tx)': 'Longitude (TX)',
 
-    // Lat/Lon (RX)
     'zem. šířka (rx)': 'Latitude (RX)',
     'breitenkreis (rx)': 'Latitude (RX)',
     'latitudine (rx)': 'Latitude (RX)',

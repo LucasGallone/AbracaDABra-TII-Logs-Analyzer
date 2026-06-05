@@ -12,11 +12,13 @@ export default function App() {
   const [stats, setStats] = useState<ScanStats | null>(null);
   const [mobileStats, setMobileStats] = useState<MobileScanStats | null>(null);
   const [rawData, setRawData] = useState<RawDABRow[] | null>(null);
+  const [fileCount, setFileCount] = useState<number>(1);
   const [showTypeModal, setShowTypeModal] = useState(false);
   const { theme, toggleTheme, language, toggleLanguage, t } = useAppContext();
 
-  const handleDataParsed = (data: RawDABRow[]) => {
+  const handleDataParsed = (data: RawDABRow[], count: number) => {
     setRawData(data);
+    setFileCount(count);
     setShowTypeModal(true);
   };
 
@@ -95,12 +97,13 @@ export default function App() {
         ) : stats ? (
           <Dashboard stats={stats} onReset={handleReset} onUpdateStats={setStats} />
         ) : mobileStats ? (
-          <MobileDashboard stats={mobileStats} onReset={handleReset} />
+          <MobileDashboard stats={mobileStats} onReset={handleReset} fileCount={fileCount} rawData={rawData || []} />
         ) : null}
       </main>
 
       <ScanTypeModal 
         isOpen={showTypeModal} 
+        fileCount={fileCount}
         onSelect={handleScanTypeSelect} 
         onClose={handleModalClose} 
       />

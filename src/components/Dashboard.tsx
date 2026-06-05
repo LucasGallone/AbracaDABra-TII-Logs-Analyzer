@@ -2,18 +2,21 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { format } from 'date-fns';
 import { fr, enUS } from 'date-fns/locale';
 import { Activity, MapPin, Radio, Signal, AlertCircle, FileText, Download, Map as MapIcon, List, ArrowDownUp, Image as ImageIcon, Mountain } from 'lucide-react';
-import { ScanStats, MultiplexStat } from '../types';
+import { ScanStats, MultiplexStat, RawDABRow } from '../types';
 import { useAppContext } from '../contexts/AppContext';
 import { generatePDF, generateTXT } from '../lib/export';
 import { CoverageMap } from './CoverageMap';
 import { LocationPromptModal } from './LocationPromptModal';
 import { toJpeg } from 'html-to-image';
 import { sortChannels } from '../lib/utils';
+import Papa from 'papaparse';
 
 interface DashboardProps {
   stats: ScanStats;
   onReset: () => void;
   onUpdateStats: React.Dispatch<React.SetStateAction<ScanStats | null>>;
+  fileCount?: number;
+  rawData?: RawDABRow[];
 }
 
 function StatCard({ title, value, icon, subtitle }: { title: string, value: string | number, icon: React.ReactNode, subtitle?: string }) {
@@ -252,7 +255,7 @@ const MultiplexCard: React.FC<{ mux: MultiplexStat, compact?: boolean }> = ({ mu
   );
 }
 
-export function Dashboard({ stats, onReset, onUpdateStats }: DashboardProps) {
+export function Dashboard({ stats, onReset, onUpdateStats, fileCount = 1, rawData = [] }: DashboardProps) {
   const { language, t } = useAppContext();
   const [sortMode, setSortMode] = useState<'channel' | 'label'>('channel');
   const [showMapLines, setShowMapLines] = useState(() => {
@@ -377,6 +380,19 @@ export function Dashboard({ stats, onReset, onUpdateStats }: DashboardProps) {
     }
   };
 
+  const handleExportCsv = () => {
+    if (!rawData || rawData.length === 0) return;
+    const csvStr = Papa.unparse(rawData, { delimiter: ';' });
+    const blob = new Blob([csvStr], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `combined_scan_${format(new Date(), 'yyyyMMdd_HHmmss')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const sortedMultiplexes = useMemo(() => {
     return [...stats.multiplexes].sort((a, b) => {
       if (sortMode === 'channel') {
@@ -429,43 +445,54 @@ export function Dashboard({ stats, onReset, onUpdateStats }: DashboardProps) {
            </div>
         </div>
         
-        <div className="flex flex-row items-center gap-2 sm:gap-3 shrink-0 flex-wrap sm:flex-nowrap">
-          <button 
-            onClick={() => {
-              if (stats.rxLat !== undefined) setExportConfig({ type: 'txt' });
-              else generateTXT(stats, language, false, null);
-            }}
-            className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 px-4 py-2 rounded-lg transition-colors shadow-sm"
-          >
-            <FileText className="w-4 h-4" />
-            {t('exportTxt')}
-          </button>
-          <button 
-            onClick={() => {
-              if (stats.rxLat !== undefined) setExportConfig({ type: 'pdf' });
-              else {
-                // if no geolocation is available, export directly
-                captureMap().then(mapUrl => {
-                  let imgData = undefined;
-                  if (mapUrl && mapRef.current) {
-                     const rect = mapRef.current.getBoundingClientRect();
-                     imgData = { url: mapUrl, ratio: rect.height / rect.width };
-                  }
-                  generatePDF(stats, language, imgData, false, null);
-                });
-              }
-            }}
-            className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 px-4 py-2 rounded-lg transition-colors shadow-sm"
-          >
-            <Download className="w-4 h-4" />
-            {t('exportPdf')}
-          </button>
-          <button 
-            onClick={onReset}
-            className="text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-lg transition-colors shadow-sm whitespace-nowrap"
-          >
-            {t('analyzeAnother')}
-          </button>
+        <div className="flex flex-col items-end gap-3 shrink-0">
+          <div className="flex flex-row items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
+            <button 
+              onClick={() => {
+                if (stats.rxLat !== undefined) setExportConfig({ type: 'txt' });
+                else generateTXT(stats, language, false, null);
+              }}
+              className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 px-4 py-2 rounded-lg transition-colors shadow-sm"
+            >
+              <FileText className="w-4 h-4" />
+              {t('exportTxt')}
+            </button>
+            <button 
+              onClick={() => {
+                if (stats.rxLat !== undefined) setExportConfig({ type: 'pdf' });
+                else {
+                  // if no geolocation is available, export directly
+                  captureMap().then(mapUrl => {
+                    let imgData = undefined;
+                    if (mapUrl && mapRef.current) {
+                       const rect = mapRef.current.getBoundingClientRect();
+                       imgData = { url: mapUrl, ratio: rect.height / rect.width };
+                    }
+                    generatePDF(stats, language, imgData, false, null);
+                  });
+                }
+              }}
+              className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 px-4 py-2 rounded-lg transition-colors shadow-sm"
+            >
+              <Download className="w-4 h-4" />
+              {t('exportPdf')}
+            </button>
+            <button 
+              onClick={onReset}
+              className="text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-lg transition-colors shadow-sm whitespace-nowrap"
+            >
+              {t('analyzeAnother')}
+            </button>
+          </div>
+          {fileCount > 1 && (
+            <button 
+              onClick={handleExportCsv}
+              className="flex items-center justify-center gap-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 px-5 py-2 rounded-lg transition-colors shadow-sm whitespace-nowrap w-full sm:w-auto"
+            >
+              <Download className="w-4 h-4" />
+              {language === 'fr' ? 'Exporter les données combinées en CSV' : 'Export the combined data to CSV'}
+            </button>
+          )}
         </div>
       </div>
 

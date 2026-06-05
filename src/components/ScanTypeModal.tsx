@@ -5,11 +5,12 @@ import { useAppContext } from '../contexts/AppContext';
 
 interface ScanTypeModalProps {
   isOpen: boolean;
+  fileCount?: number;
   onSelect: (type: 'fixed' | 'mobile') => void;
   onClose: () => void;
 }
 
-export function ScanTypeModal({ isOpen, onSelect, onClose }: ScanTypeModalProps) {
+export function ScanTypeModal({ isOpen, fileCount = 1, onSelect, onClose }: ScanTypeModalProps) {
   const { t } = useAppContext();
 
   if (!isOpen) return null;
@@ -25,7 +26,7 @@ export function ScanTypeModal({ isOpen, onSelect, onClose }: ScanTypeModalProps)
         >
           <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800">
             <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">
-              {t('scanTypeTitle')}
+              {fileCount > 1 ? t('scanTypeTitlePlural') : t('scanTypeTitle')}
             </h2>
             <button
               onClick={onClose}
@@ -36,7 +37,7 @@ export function ScanTypeModal({ isOpen, onSelect, onClose }: ScanTypeModalProps)
           </div>
 
           <div className="p-6 text-slate-600 dark:text-slate-300">
-            <p className="mb-6 whitespace-pre-line">{t('scanTypeDesc')}</p>
+            <p className="mb-6 whitespace-pre-line">{fileCount > 1 ? t('scanTypeDescPlural') : t('scanTypeDesc')}</p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <button

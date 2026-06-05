@@ -95,7 +95,7 @@ export default function App() {
         {!stats && !mobileStats ? (
           <FileUpload onDataParsed={handleDataParsed} />
         ) : stats ? (
-          <Dashboard stats={stats} onReset={handleReset} onUpdateStats={setStats} />
+          <Dashboard stats={stats} onReset={handleReset} onUpdateStats={setStats} fileCount={fileCount} rawData={rawData || []} />
         ) : mobileStats ? (
           <MobileDashboard stats={mobileStats} onReset={handleReset} fileCount={fileCount} rawData={rawData || []} />
         ) : null}

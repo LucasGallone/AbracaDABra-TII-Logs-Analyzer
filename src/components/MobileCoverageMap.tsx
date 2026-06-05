@@ -762,51 +762,52 @@ export function MobileCoverageMap({
             ))}
 
             {showPoints && (
-              <>
-                <Pane name="sfnPane" style={{ zIndex: 410 }}>
-                  {renderPoints.filter(p => p.hasSfnConflict).map(p => (
-                    <Marker
-                      key={`sfn-${p.lat}-${p.lon}-${selectedTx || 'all'}`}
-                      position={[p.lat, p.lon]}
-                      interactive={false}
-                      icon={L.divIcon({
-                        className: 'sfn-pulse-divicon',
-                        iconSize: [20, 20],
-                        iconAnchor: [10, 10]
-                      })}
-                    />
-                  ))}
-                </Pane>
+              <React.Fragment>
+                {/* Render red SFN rings first, so they are drawn under the green points */}
+                {renderPoints.filter(p => p.hasSfnConflict).map(p => (
+                  <CircleMarker
+                    key={`sfn-${p.lat}-${p.lon}-${selectedTx || 'all'}`}
+                    center={[p.lat, p.lon]}
+                    radius={10}
+                    interactive={false}
+                    pathOptions={{
+                      fill: false,
+                      color: '#ef4444',
+                      weight: 4,
+                      stroke: true,
+                      className: 'sfn-pulse-svg'
+                    }}
+                  />
+                ))}
 
-                <Pane name="pointsPane" style={{ zIndex: 420 }}>
-                  {renderPoints.map((p, idx) => {
-                    const isSelected = selectedPoint && selectedPoint.lat === p.lat && selectedPoint.lon === p.lon && selectedPoint.timeMs === p.timeMs;
-                    const fillColor = isSelected ? '#a855f7' : p.renderColor;
-                    
-                    return (
-                      <CircleMarker
-                        key={`${p.lat}-${p.lon}-${colorMode}-${selectedTx || 'all'}-${mapZoom >= 13}-${p.hasSfnConflict}`}
-                        center={[p.lat, p.lon]}
-                        radius={7} 
-                        pathOptions={{ 
-                          fillColor: fillColor, 
-                          color: 'rgba(0,0,0,0.5)', 
-                          weight: mapZoom >= 13 ? 1.5 : 0, 
-                          stroke: mapZoom >= 13, 
-                          fillOpacity: 0.9
-                        }}
-                        eventHandlers={{ click: (e) => {
-                           if (e && e.originalEvent) {
-                             L.DomEvent.stopPropagation(e.originalEvent);
-                             (e.originalEvent as any)._stopped = true;
-                           }
-                           setSelectedPoint(p);
-                        } }}
-                      />
-                    );
-                  })}
-                </Pane>
-              </>
+                {/* Render green points second, so they are drawn on top */}
+                {renderPoints.map((p, idx) => {
+                  const isSelected = selectedPoint && selectedPoint.lat === p.lat && selectedPoint.lon === p.lon && selectedPoint.timeMs === p.timeMs;
+                  const fillColor = isSelected ? '#a855f7' : p.renderColor;
+                  
+                  return (
+                    <CircleMarker
+                      key={`${p.lat}-${p.lon}-${colorMode}-${selectedTx || 'all'}-${mapZoom >= 13}-${p.hasSfnConflict}`}
+                      center={[p.lat, p.lon]}
+                      radius={7} 
+                      pathOptions={{ 
+                        fillColor: fillColor, 
+                        color: 'rgba(0,0,0,0.5)', 
+                        weight: mapZoom >= 13 ? 1.5 : 0, 
+                        stroke: mapZoom >= 13, 
+                        fillOpacity: 0.9
+                      }}
+                      eventHandlers={{ click: (e) => {
+                         if (e && e.originalEvent) {
+                           L.DomEvent.stopPropagation(e.originalEvent);
+                           (e.originalEvent as any)._stopped = true;
+                         }
+                         setSelectedPoint(p);
+                      } }}
+                    />
+                  );
+                })}
+              </React.Fragment>
             )}
           <MapEventHandler onClick={() => { setSelectedPoint(null); setActiveLine(null); setMapPickerOpen(false); setIsMuxDropdownOpen(false); }} onZoom={(z) => setMapZoom(z)} />
         </MapContainer>

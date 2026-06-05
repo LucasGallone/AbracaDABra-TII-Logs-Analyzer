@@ -282,7 +282,19 @@ export function ElevationProfile({ rxCoords, txCoords, location, onClose, onHove
          </div>
        </div>
 
-       <div className="p-4 h-52 bg-white dark:bg-[#313338] rounded-b-xl overflow-hidden cursor-pointer" style={{ minHeight: '200px' }} onClick={() => { if (onClickPoint) { if (isProfileZoomed) { onClickPoint([0, 0]); } else if (hoveredCoordsRef.current) { onClickPoint(hoveredCoordsRef.current); } } }}>
+       <div 
+         onClick={() => {
+           if (onClickPoint) {
+             if (isProfileZoomed) {
+               onClickPoint([0, 0]);
+             } else if (hoveredCoordsRef.current) {
+               onClickPoint(hoveredCoordsRef.current);
+             }
+           }
+         }}
+         className="p-4 h-52 bg-white dark:bg-[#313338] rounded-b-xl overflow-hidden cursor-pointer" 
+         style={{ minHeight: '200px' }}
+       >
          {loading ? (
             <div className="h-full flex items-center justify-center text-slate-500 text-sm">
                {language === 'fr' ? 'Chargement...' : 'Loading...'}
@@ -298,7 +310,31 @@ export function ElevationProfile({ rxCoords, txCoords, location, onClose, onHove
          ) : profileData ? (
             <ResponsiveContainer width="100%" height="100%" minHeight={200} minWidth={200}>
               <ComposedChart 
-                onMouseMove={(state: any) => {
+                onClick={(state: any, e: any) => {
+                   if (e && e.stopPropagation) {
+                     e.stopPropagation();
+                   }
+                   if (onClickPoint) {
+                     if (isProfileZoomed) {
+                       onClickPoint([0, 0]);
+                     } else {
+                       let coords: [number, number] | null = null;
+                       if (state && state.activePayload && state.activePayload.length) {
+                         const item = state.activePayload[0].payload;
+                         if (item && item.lat !== undefined && item.lon !== undefined) {
+                           coords = [Number(item.lat), Number(item.lon)];
+                         }
+                       }
+                       if (!coords && hoveredCoordsRef.current) {
+                         coords = hoveredCoordsRef.current;
+                       }
+                       if (coords) {
+                         onClickPoint(coords);
+                       }
+                     }
+                   }
+                 }}
+                 onMouseMove={(state: any) => {
                   if (state && state.activePayload && state.activePayload.length && onClickPoint) {
                     const item = state.activePayload[0].payload;
                     if (item && item.lat !== undefined && item.lon !== undefined) {
@@ -363,7 +399,7 @@ export const MAP_TILES = [
 
 export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProps) {
   const { t, language } = useAppContext();
-  const [selectedTxForProfile, setSelectedTxForProfile] = useState<{lat: number, lon: number, location: string} | null>(null);
+  const [topoProps, setTopoProps] = useState<{ rxCoords: [number, number], txCoords: [number, number], location: string } | null>(null);
   const [profileHoverPoint, setProfileHoverPoint] = useState<[number, number] | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [mapPickerOpen, setMapPickerOpen] = useState(false);
@@ -378,18 +414,18 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
   const [isProfileObstructed, setIsProfileObstructed] = useState(false);
 
   useEffect(() => {
-    if (!selectedTxForProfile) {
+    if (!topoProps) {
       setIsProfileZoomed(false);
       setIsProfileObstructed(false);
       profileZoomBeforeRef.current = null;
     }
-  }, [selectedTxForProfile]);
+  }, [topoProps]);
 
   useEffect(() => {
     const handleCloseEvents = () => {
       setFilterOpen(false);
       setMapPickerOpen(false);
-      setSelectedTxForProfile(null);
+      setTopoProps(null);
     };
     const handleForceShow = () => setForceShowAllMuxes(true);
     const handleRestore = () => setForceShowAllMuxes(false);
@@ -478,45 +514,45 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
 
   return (
     <div className="h-[500px] rounded-xl overflow-hidden shadow-sm border border-slate-200 dark:border-slate-700 relative z-0">
-      {selectedTxForProfile && rxCoords && (
-        <ElevationProfile 
-          rxCoords={rxCoords} 
-          txCoords={[selectedTxForProfile.lat, selectedTxForProfile.lon]} 
-          location={selectedTxForProfile.location} 
-          isProfileZoomed={isProfileZoomed} 
-          onClose={() => {
-            setSelectedTxForProfile(null);
-            setProfileHoverPoint(null);
-            setIsProfileZoomed(false);
-            setIsProfileObstructed(false);
-            profileZoomBeforeRef.current = null;
-            if (prevViewRef.current && mapRef.current) {
-              mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom);
-              prevViewRef.current = null;
-            }
-          }}
-          onHoverPoint={setProfileHoverPoint}
-          onObstructionChange={setIsProfileObstructed}
-          onClickPoint={(coords) => {
-            if (!mapRef.current) return;
-            if (isProfileZoomed) {
-              if (profileZoomBeforeRef.current) {
-                mapRef.current.setView(profileZoomBeforeRef.current.center, profileZoomBeforeRef.current.zoom);
-              } else if (prevViewRef.current) {
-                mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom);
-              }
-              setIsProfileZoomed(false);
-              profileZoomBeforeRef.current = null;
-            } else {
-              profileZoomBeforeRef.current = {
-                center: mapRef.current.getCenter(),
-                zoom: mapRef.current.getZoom()
-              };
-              mapRef.current.setView(coords, 15);
-              setIsProfileZoomed(true);
-            }
-          }}
-        />
+      {topoProps && (
+         <ElevationProfile 
+           rxCoords={topoProps.rxCoords} 
+           txCoords={topoProps.txCoords} 
+           location={topoProps.location} 
+           isProfileZoomed={isProfileZoomed} 
+           onClose={() => {
+             setTopoProps(null);
+             setProfileHoverPoint(null);
+             setIsProfileZoomed(false);
+             setIsProfileObstructed(false);
+             profileZoomBeforeRef.current = null;
+             if (prevViewRef.current && mapRef.current) {
+               mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom);
+               prevViewRef.current = null;
+             }
+           }}
+           onHoverPoint={setProfileHoverPoint}
+           onObstructionChange={setIsProfileObstructed}
+           onClickPoint={(coords) => {
+             if (!mapRef.current) return;
+             if (isProfileZoomed) {
+               if (profileZoomBeforeRef.current) {
+                 mapRef.current.setView(profileZoomBeforeRef.current.center, profileZoomBeforeRef.current.zoom);
+               } else if (prevViewRef.current) {
+                 mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom);
+               }
+               setIsProfileZoomed(false);
+               profileZoomBeforeRef.current = null;
+             } else {
+               profileZoomBeforeRef.current = {
+                 center: mapRef.current.getCenter(),
+                 zoom: mapRef.current.getZoom()
+               };
+               mapRef.current.setView(coords, 15);
+               setIsProfileZoomed(true);
+             }
+           }}
+         />
       )}
       
       <div className="absolute top-4 right-4 z-[1000] flex gap-2 items-start export-hide">
@@ -674,8 +710,8 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
                 {rxCoords && (
                    <button 
                      onClick={() => {
-                       if (selectedTxForProfile?.lat === tx.lat && selectedTxForProfile?.lon === tx.lon) {
-                         setSelectedTxForProfile(null);
+                       if (topoProps?.rxCoords[0] === rxCoords[0] && topoProps?.rxCoords[1] === rxCoords[1] && topoProps?.txCoords[0] === tx.lat && topoProps?.txCoords[1] === tx.lon) {
+                         setTopoProps(null);
                          setProfileHoverPoint(null);
                          if (prevViewRef.current && mapRef.current) {
                            mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom);
@@ -691,10 +727,14 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
                              [tx.lat, tx.lon]
                            ], { padding: [50, 50] });
                          }
-                         setSelectedTxForProfile({lat: tx.lat, lon: tx.lon, location: tx.location});
+                         setTopoProps({
+                           rxCoords: rxCoords,
+                           txCoords: [tx.lat, tx.lon],
+                           location: tx.location || t('unknownSite')
+                         });
                        }
                      }} 
-                     className={`absolute top-0 right-0 p-1.5 rounded-md transition-colors ${selectedTxForProfile?.lat === tx.lat && selectedTxForProfile?.lon === tx.lon ? 'bg-amber-200 hover:bg-amber-300 text-amber-800' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`} 
+                     className={`absolute top-0 right-0 p-1.5 rounded-md transition-colors ${topoProps?.rxCoords[0] === rxCoords[0] && topoProps?.txCoords[0] === tx.lat ? 'bg-amber-200 hover:bg-amber-300 text-amber-800' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`} 
                      title={language === 'fr' ? "Visualiser le profil topographique" : "Visualize the elevation profile"}
                    >
                      <Mountain className="w-4 h-4" />
@@ -736,9 +776,12 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
           />
         ))}
 
-        {selectedTxForProfile && rxCoords && !showLines && (
+        {topoProps && !showLines && (
           <Polyline 
-            positions={[rxCoords, [selectedTxForProfile.lat, selectedTxForProfile.lon]]} 
+            positions={[
+              [topoProps.rxCoords[0], topoProps.rxCoords[1]],
+              [topoProps.txCoords[0], topoProps.txCoords[1]]
+            ]} 
             color="#3b82f6" 
             weight={3} 
             opacity={0.7} 
@@ -753,7 +796,7 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
            />
         )}
 
-        {bounds.isValid() && <BoundsUpdater bounds={bounds} disabled={!!selectedTxForProfile} />}
+        {bounds.isValid() && <BoundsUpdater bounds={bounds} disabled={!!topoProps} />}
       </MapContainer>
     </div>
   );

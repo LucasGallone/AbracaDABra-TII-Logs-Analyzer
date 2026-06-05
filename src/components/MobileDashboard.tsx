@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { MobileScanStats, MobileMultiplexStat, MobileTransmitterStat } from '../types';
-import { RefreshCcw, Radio, Activity, Navigation, List, LayoutGrid, Signal, MapPin, ArrowDownUp } from 'lucide-react';
+import { MobileScanStats, MobileMultiplexStat, MobileTransmitterStat, RawDABRow } from '../types';
+import { RefreshCcw, Radio, Activity, Navigation, List, LayoutGrid, Signal, MapPin, ArrowDownUp, Download } from 'lucide-react';
+import Papa from 'papaparse';
 import { TruncatedText } from './TruncatedText';
 import { useAppContext } from '../contexts/AppContext';
 import { MobileCoverageMap } from './MobileCoverageMap';
@@ -22,7 +23,17 @@ function StatCard({ title, value, icon, subtitle }: { title: string, value: stri
   );
 }
 
-export function MobileDashboard({ stats, onReset }: { stats: MobileScanStats, onReset: () => void }) {
+export function MobileDashboard({ 
+  stats, 
+  onReset,
+  fileCount = 1,
+  rawData = []
+}: { 
+  stats: MobileScanStats, 
+  onReset: () => void,
+  fileCount?: number,
+  rawData?: RawDABRow[]
+}) {
   const { t, language } = useAppContext();
   const [selectedMux, setSelectedMux] = useState<MobileMultiplexStat | null>(stats.multiplexes[0] || null);
   const [compact, setCompact] = useState(false);
@@ -45,11 +56,26 @@ export function MobileDashboard({ stats, onReset }: { stats: MobileScanStats, on
   });
 
   const dateLocale = language === 'fr' ? fr : enUS;
-  const dateFormat = language === 'fr' ? "dd/MM/yyyy 'à' HH'h'mm" : "dd/MM/yyyy 'at' HH:mm";
-  let formattedDate = format(stats.startTime, dateFormat, { locale: dateLocale });
+  const dateFormat = language === 'fr' ? "dd/MM/yyyy" : "dd/MM/yyyy";
+  const timeFormat = language === 'fr' ? "HH'h'mm" : "HH:mm";
+  
+  let formattedDate = format(stats.startTime, `${dateFormat} '${language==='fr'?'à':'at'}' ${timeFormat}`, { locale: dateLocale });
   if (stats.timeZoneStr) {
     formattedDate += ` ${stats.timeZoneStr}`;
   }
+
+  const handleExportCsv = () => {
+    if (!rawData || rawData.length === 0) return;
+    const csvStr = Papa.unparse(rawData, { delimiter: ';' });
+    const blob = new Blob([csvStr], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `combined_mobile_scan_${format(new Date(), 'yyyyMMdd_HHmmss')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const sortedMultiplexes = [...stats.multiplexes].sort((a, b) => {
     if (sortBy === 'multiplexes') {
@@ -74,12 +100,31 @@ export function MobileDashboard({ stats, onReset }: { stats: MobileScanStats, on
            <div className="text-slate-500 dark:text-slate-400 mt-1 flex flex-col sm:flex-row sm:items-center gap-2">
              <span className="flex items-center gap-2 whitespace-nowrap">
                <Activity className="w-4 h-4 shrink-0" />
-               {t('scanStart')} <span className="font-semibold text-slate-700 dark:text-slate-300">{formattedDate}</span>
+               {fileCount > 1 ? (
+                 <span>
+                   {language === 'fr' ? (
+                     <><span className="font-semibold">{fileCount}</span> fichiers combinés. Le plus ancien date du <span className="font-semibold">{format(stats.startTime, dateFormat, { locale: dateLocale })}</span>.</>
+                   ) : (
+                     <><span className="font-semibold">{fileCount}</span> files combined. The oldest is from <span className="font-semibold">{format(stats.startTime, dateFormat, { locale: dateLocale })}</span>.</>
+                   )}
+                 </span>
+               ) : (
+                 <>{t('scanStart')} <span className="font-semibold text-slate-700 dark:text-slate-300">{formattedDate}</span></>
+               )}
              </span>
            </div>
         </div>
         
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full xl:w-auto shrink-0 relative">
+          {fileCount > 1 && (
+            <button 
+              onClick={handleExportCsv}
+              className="flex items-center justify-center gap-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 px-5 py-2 rounded-lg transition-colors shadow-sm whitespace-nowrap"
+            >
+              <Download className="w-4 h-4" />
+              {language === 'fr' ? 'Exporter les données combinées en CSV' : 'Export the combined data to CSV'}
+            </button>
+          )}
           <button 
             onClick={onReset}
             className="text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-lg transition-colors shadow-sm whitespace-nowrap"

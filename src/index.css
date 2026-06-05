@@ -2,12 +2,11 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @keyframes sfn-ping {
-  0% { stroke: rgba(239, 68, 68, 1); stroke-width: 4px; }
-  50% { stroke: rgba(239, 68, 68, 0.1); stroke-width: 4px; }
-  100% { stroke: rgba(239, 68, 68, 1); stroke-width: 4px; }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 
-.sfn-pulse {
+.sfn-pulse-stroke {
   animation: sfn-ping 1.2s infinite ease-in-out;
 }
 

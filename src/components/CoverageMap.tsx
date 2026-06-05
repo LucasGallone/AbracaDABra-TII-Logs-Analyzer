@@ -68,11 +68,27 @@ function MapPopupCloser() {
 }
 
 function MapClickHandler({ onUpdateStats, rxCoords }: { onUpdateStats?: React.Dispatch<React.SetStateAction<ScanStats | null>>, rxCoords: [number, number] | null }) {
+  const rxCoordsRef = useRef(rxCoords);
+  const onUpdateStatsRef = useRef(onUpdateStats);
+
+  useEffect(() => {
+    rxCoordsRef.current = rxCoords;
+  }, [rxCoords]);
+
+  useEffect(() => {
+    onUpdateStatsRef.current = onUpdateStats;
+  }, [onUpdateStats]);
+
   useMapEvents({
     click(e) {
+      const target = e.originalEvent.target as HTMLElement;
+      if (target && (target.closest('.absolute') || target.closest('.export-hide') || target.closest('.bg-white') || target.closest('.recharts-wrapper') || target.closest('.leaflet-popup') || target.closest('.leaflet-control'))) {
+        return;
+      }
+
       window.dispatchEvent(new CustomEvent('close-map-popups'));
-      if (!rxCoords && onUpdateStats) {
-        onUpdateStats(prev => prev ? { ...prev, rxLat: e.latlng.lat, rxLon: e.latlng.lng } : null);
+      if (!rxCoordsRef.current && onUpdateStatsRef.current) {
+        onUpdateStatsRef.current(prev => prev ? { ...prev, rxLat: e.latlng.lat, rxLon: e.latlng.lng } : null);
       }
     }
   });
@@ -141,7 +157,24 @@ function ProfileTooltip({ active, payload, label, language, onHoverPoint }: any)
 export function ElevationProfile({ rxCoords, txCoords, location, onClose, onHoverPoint, onClickPoint, isProfileZoomed, onObstructionChange }: { rxCoords: [number, number]; txCoords: [number, number]; location: string; onClose: () => void; onHoverPoint?: (coords: [number, number] | null) => void; onClickPoint?: (coords: [number, number]) => void; isProfileZoomed?: boolean; onObstructionChange?: (obstructed: boolean) => void; }) {
   const [rawData, setRawData] = useState<number[] | null>(null);
   const hoveredCoordsRef = useRef<[number, number] | null>(null);
-  const [rxHeight, setRxHeight] = useState('3');
+  
+  const [rxHeight, setRxHeight] = useState(() => {
+    return localStorage.getItem('elevation_rx_height') || '3';
+  });
+  const [txHeight, setTxHeight] = useState(() => {
+    return localStorage.getItem('elevation_tx_height') || '30';
+  });
+
+  const handleRxHeightChange = (val: string) => {
+    setRxHeight(val);
+    localStorage.setItem('elevation_rx_height', val);
+  };
+
+  const handleTxHeightChange = (val: string) => {
+    setTxHeight(val);
+    localStorage.setItem('elevation_tx_height', val);
+  };
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [timeoutError, setTimeoutError] = useState(false);
@@ -202,7 +235,7 @@ export function ElevationProfile({ rxCoords, txCoords, location, onClose, onHove
     const steps = rawData.length - 1;
     const totalDist = getDistanceFromLatLonInKm(rxCoords[0], rxCoords[1], txCoords[0], txCoords[1]);
     const startElev = rawData[0] + Number(rxHeight || '0');
-    const endElev = rawData[rawData.length - 1];
+    const endElev = rawData[rawData.length - 1] + Number(txHeight || '0');
     let hasObstruction = false;
     
     const p1 = L.CRS.EPSG3857.project(L.latLng(rxCoords[0], rxCoords[1]));
@@ -233,7 +266,7 @@ export function ElevationProfile({ rxCoords, txCoords, location, onClose, onHove
     });
     
     return { chartData, hasObstruction };
-  }, [rawData, rxHeight, rxCoords[0], rxCoords[1], txCoords[0], txCoords[1]]);
+  }, [rawData, rxHeight, txHeight, rxCoords[0], rxCoords[1], txCoords[0], txCoords[1]]);
 
   useEffect(() => {
     if (onObstructionChange) {
@@ -242,7 +275,12 @@ export function ElevationProfile({ rxCoords, txCoords, location, onClose, onHove
   }, [profileData?.hasObstruction, onObstructionChange]);
 
   return (
-    <div className="absolute top-4 left-14 z-[1000] w-80 shrink-0 bg-white dark:bg-[#313338] rounded-xl shadow-xl border border-slate-200 dark:border-slate-700/80 flex flex-col pointer-events-auto">
+    <div 
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      className="absolute top-4 left-14 z-[1000] w-80 shrink-0 bg-white dark:bg-[#313338] rounded-xl shadow-xl border border-slate-200 dark:border-slate-700/80 flex flex-col pointer-events-auto"
+    >
        <div className="flex justify-between items-center bg-slate-50 dark:bg-[#2B2D31] px-4 py-3 border-b border-slate-200 dark:border-slate-700/80 rounded-t-xl">
          <span className="font-semibold text-sm truncate pr-2 text-slate-800 dark:text-slate-200">
            {language === 'fr' ? 'Profil topographique' : 'Elevation profile'}
@@ -252,46 +290,59 @@ export function ElevationProfile({ rxCoords, txCoords, location, onClose, onHove
          </button>
        </div>
        
-       <div className="relative px-4 py-2 text-slate-600 dark:text-slate-400 bg-white dark:bg-[#313338] border-b border-slate-100 dark:border-slate-700/50 flex">
-         
-         {/* Left Side: Receiver */}
-         <div className="flex flex-col items-center w-16 shrink-0 z-10">
-            <ClassicRadioIcon className="w-5 h-5 text-emerald-600 dark:text-emerald-500 mb-1" />
-            <span className="text-[10px] font-medium">{language === 'fr' ? 'Récepteur' : 'Receiver'}</span>
-         </div>
-         
-         {/* Middle: Dashed Line and Centered Input */}
-         <div className="flex-1 flex flex-col items-center relative px-1">
-            <div className="w-full absolute top-[11px] border-t-2 border-dashed border-slate-300 dark:border-slate-600 -z-0"></div>
-            
-            <div className="mt-[26px] flex items-center gap-1 z-10 bg-white dark:bg-[#313338] px-1.5 rounded-full">
-              <input 
-                type="number" 
-                value={rxHeight} 
-                onChange={(e) => setRxHeight(e.target.value)} 
-                className="w-12 h-5 text-xs text-center border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-              <span className="text-[9px]">{language === 'fr' ? 'm/sol' : 'm/ground'}</span>
+       <div className="relative px-4 py-2.5 bg-white dark:bg-[#313338] border-b border-slate-100 dark:border-slate-700/50 flex flex-col gap-2">
+         {/* Top row: Icons, Labels and connection line */}
+         <div className="flex items-center justify-between w-full">
+            {/* Left label */}
+            <div className="flex items-center gap-1 z-10 shrink-0">
+               <ClassicRadioIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-500" />
+               <span className="text-[10px] font-medium leading-none text-slate-600 dark:text-slate-400">{language === 'fr' ? 'Récepteur' : 'Receiver'}</span>
+            </div>
+
+            {/* Connection line */}
+            <div className="flex-1 border-t-2 border-dashed border-slate-300 dark:border-slate-600 mx-3"></div>
+
+            {/* Right label */}
+            <div className="flex items-center gap-1 z-10 shrink-0">
+               <RadioTower className="w-4 h-4 text-blue-600 dark:text-blue-500" />
+               <span className="text-[10px] font-medium leading-none text-slate-600 dark:text-slate-400">{language === 'fr' ? 'Émetteur' : 'Transmitter'}</span>
             </div>
          </div>
-         
-         {/* Right Side: Transmitter */}
-         <div className="flex flex-col items-center w-16 shrink-0 z-10">
-            <RadioTower className="w-5 h-5 text-blue-600 dark:text-blue-500 mb-1" />
-            <span className="text-[10px] font-medium">{language === 'fr' ? 'Émetteur' : 'Transmitter'}</span>
+
+         {/* Bottom row: Inputs */}
+         <div className="flex items-center justify-between w-full">
+            {/* Left Input */}
+            <div className="w-[112px] shrink-0">
+              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 w-full justify-center">
+                <input 
+                  type="number" 
+                  value={rxHeight} 
+                  onChange={(e) => handleRxHeightChange(e.target.value)} 
+                  className="w-10 h-4 text-[10px] text-center bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none"
+                />
+                <span className="text-[8.5px] font-semibold text-slate-400 dark:text-slate-500 whitespace-nowrap shrink-0">{language === 'fr' ? 'm/sol' : 'm/ground'}</span>
+              </div>
+            </div>
+
+            {/* Spacer */}
+            <div className="flex-1"></div>
+
+            {/* Right Input */}
+            <div className="w-[112px] shrink-0">
+              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 w-full justify-center">
+                <input 
+                  type="number" 
+                  value={txHeight} 
+                  onChange={(e) => handleTxHeightChange(e.target.value)} 
+                  className="w-10 h-4 text-[10px] text-center bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none"
+                />
+                <span className="text-[8.5px] font-semibold text-slate-400 dark:text-slate-500 whitespace-nowrap shrink-0">{language === 'fr' ? 'm/sol' : 'm/ground'}</span>
+              </div>
+            </div>
          </div>
        </div>
 
        <div 
-         onClick={() => {
-           if (onClickPoint) {
-             if (isProfileZoomed) {
-               onClickPoint([0, 0]);
-             } else if (hoveredCoordsRef.current) {
-               onClickPoint(hoveredCoordsRef.current);
-             }
-           }
-         }}
          className="p-4 h-52 bg-white dark:bg-[#313338] rounded-b-xl overflow-hidden cursor-pointer" 
          style={{ minHeight: '200px' }}
        >
@@ -354,8 +405,8 @@ export function ElevationProfile({ rxCoords, txCoords, location, onClose, onHove
                 <XAxis dataKey="distance" type="number" textAnchor="end" tick={{fontSize: 10, fill: '#64748b'}} tickMargin={5} tickFormatter={(val) => `${val}km`} domain={['dataMin', 'dataMax']} tickCount={6} />
                 <YAxis tick={{fontSize: 10, fill: '#64748b'}} width={40} tickMargin={5} tickFormatter={(val) => `${val}m`} tickCount={5} />
                  <RechartsTooltip content={<ProfileTooltip language={language} onHoverPoint={(coords: any) => { hoveredCoordsRef.current = coords; if (onHoverPoint) onHoverPoint(coords); }} />} />
-                <Area type="monotone" dataKey="elevation" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorElev)" />
-                <Line type="linear" dataKey="lineOfSight" stroke={profileData.hasObstruction ? '#ef4444' : '#4ade80'} strokeWidth={3} dot={false} strokeDasharray="4 4" activeDot={false} />
+                <Area type="monotone" dataKey="elevation" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorElev)" isAnimationActive={false} />
+                <Line type="linear" dataKey="lineOfSight" stroke={profileData.hasObstruction ? '#ef4444' : '#4ade80'} strokeWidth={3} dot={false} strokeDasharray="4 4" activeDot={false} isAnimationActive={false} />
               </ComposedChart>
             </ResponsiveContainer>
          ) : null}
@@ -418,6 +469,44 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
       setIsProfileZoomed(false);
       setIsProfileObstructed(false);
       profileZoomBeforeRef.current = null;
+
+      if (prevViewRef.current && mapRef.current) {
+        mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom, { animate: false });
+        prevViewRef.current = null;
+      }
+
+      if (mapRef.current) {
+        mapRef.current.eachLayer((layer: any) => {
+          if (typeof layer.getPopup === 'function' && layer.getPopup()) {
+            const popup = layer.getPopup();
+            popup.options.autoPan = true;
+          }
+        });
+
+        setTimeout(() => {
+          if (mapRef.current) {
+            mapRef.current.eachLayer((layer: any) => {
+              if (layer instanceof L.Marker && typeof layer.isPopupOpen === 'function' && layer.isPopupOpen()) {
+                layer.closePopup();
+                setTimeout(() => {
+                  if (layer.openPopup) {
+                    layer.openPopup();
+                  }
+                }, 40);
+              }
+            });
+          }
+        }, 120);
+      }
+    } else {
+      if (mapRef.current) {
+        mapRef.current.eachLayer((layer: any) => {
+          if (typeof layer.getPopup === 'function' && layer.getPopup()) {
+            const popup = layer.getPopup();
+            popup.options.autoPan = false;
+          }
+        });
+      }
     }
   }, [topoProps]);
 
@@ -523,13 +612,6 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
            onClose={() => {
              setTopoProps(null);
              setProfileHoverPoint(null);
-             setIsProfileZoomed(false);
-             setIsProfileObstructed(false);
-             profileZoomBeforeRef.current = null;
-             if (prevViewRef.current && mapRef.current) {
-               mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom);
-               prevViewRef.current = null;
-             }
            }}
            onHoverPoint={setProfileHoverPoint}
            onObstructionChange={setIsProfileObstructed}
@@ -542,7 +624,6 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
                  mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom);
                }
                setIsProfileZoomed(false);
-               profileZoomBeforeRef.current = null;
              } else {
                profileZoomBeforeRef.current = {
                  center: mapRef.current.getCenter(),
@@ -670,7 +751,7 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
         
         {rxCoords && (
           <Marker position={rxCoords} icon={rxIcon}>
-            <Popup>
+            <Popup autoPan={!topoProps} keepInView={false}>
               <div className="font-bold">{language === 'fr' ? 'Lieu de réception' : 'Receiver Location'}</div>
             </Popup>
           </Marker>
@@ -678,7 +759,7 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
 
         {uniqueTransmitters.map((tx, idx) => (
           <Marker key={idx} position={[tx.lat, tx.lon]} icon={txIcon}>
-            <Popup>
+            <Popup autoPan={!topoProps} keepInView={false}>
               <div className="min-w-[200px] sm:min-w-[240px] relative pb-1">
                 <div className="flex justify-between items-start mb-2 pr-8">
                   <div>
@@ -713,10 +794,6 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
                        if (topoProps?.rxCoords[0] === rxCoords[0] && topoProps?.rxCoords[1] === rxCoords[1] && topoProps?.txCoords[0] === tx.lat && topoProps?.txCoords[1] === tx.lon) {
                          setTopoProps(null);
                          setProfileHoverPoint(null);
-                         if (prevViewRef.current && mapRef.current) {
-                           mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom);
-                           prevViewRef.current = null;
-                         }
                        } else {
                          if (mapRef.current && !prevViewRef.current) {
                            prevViewRef.current = { center: mapRef.current.getCenter(), zoom: mapRef.current.getZoom() };

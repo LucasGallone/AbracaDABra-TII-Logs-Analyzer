@@ -7,7 +7,7 @@ import { useAppContext } from '../contexts/AppContext';
 import { transformColumnHeader } from '../lib/headerMap';
 
 interface FileUploadProps {
-  onDataParsed: (data: RawDABRow[]) => void;
+  onDataParsed: (data: RawDABRow[], fileCount: number) => void;
 }
 
 export function FileUpload({ onDataParsed }: FileUploadProps) {
@@ -33,33 +33,51 @@ export function FileUpload({ onDataParsed }: FileUploadProps) {
     fileInputRef.current?.click();
   };
 
-  const processFile = (file: File) => {
+  const processFiles = async (files: FileList | File[]) => {
     setError(null);
-    Papa.parse<RawDABRow>(file, {
-      header: true,
-      skipEmptyLines: true,
-      delimiter: ';',
-      transformHeader: transformColumnHeader,
-      complete: (results) => {
-        if (results.errors && results.errors.length > 0) {
-          setError(`${t('parseError')} ${results.errors[0].message}`);
-          return;
-        }
-        
-        const firstRow: any = results.data[0] || {};
-        const numColumns = Object.keys(firstRow).length;
-        const hasTimeColumn = Object.keys(firstRow).some(k => k.startsWith('Time'));
-
-        if (results.data.length > 0 && hasTimeColumn && firstRow['Channel'] && numColumns >= 8) {
-          onDataParsed(results.data);
-        } else {
-          setError('INVALID_FORMAT');
-        }
-      },
-      error: (err) => {
-        setError(`${t('parseError')} ${err.message}`);
-      }
+    if (files.length === 0) return;
+    
+    let allData: RawDABRow[] = [];
+    
+    const parsePromises = Array.from(files).map(file => {
+      return new Promise<RawDABRow[]>((resolve, reject) => {
+        Papa.parse<RawDABRow>(file, {
+          header: true,
+          skipEmptyLines: true,
+          delimiter: ';',
+          transformHeader: transformColumnHeader,
+          complete: (results) => {
+            if (results.errors && results.errors.length > 0) {
+              reject(results.errors[0].message);
+            } else {
+              resolve(results.data);
+            }
+          },
+          error: (err) => reject(err.message)
+        });
+      });
     });
+
+    try {
+      const resultsArray = await Promise.all(parsePromises);
+      for (const data of resultsArray) {
+        if (data.length > 0) {
+           allData = allData.concat(data);
+        }
+      }
+      
+      const firstRow: any = allData[0] || {};
+      const numColumns = Object.keys(firstRow).length;
+      const hasTimeColumn = Object.keys(firstRow).some(k => k.startsWith('Time'));
+
+      if (allData.length > 0 && hasTimeColumn && firstRow['Channel'] && numColumns >= 8) {
+        onDataParsed(allData, files.length);
+      } else {
+        setError('INVALID_FORMAT');
+      }
+    } catch (err: any) {
+      setError(`${t('parseError')} ${err}`);
+    }
   };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -68,13 +86,13 @@ export function FileUpload({ onDataParsed }: FileUploadProps) {
     setIsDragging(false);
 
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processFile(e.dataTransfer.files[0]);
+      processFiles(e.dataTransfer.files);
     }
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      processFile(e.target.files[0]);
+      processFiles(e.target.files);
     }
   };
 
@@ -91,7 +109,7 @@ export function FileUpload({ onDataParsed }: FileUploadProps) {
         )}
       >
         <UploadCloud className={cn("w-16 h-16 mb-4 transition-colors", isDragging ? "text-blue-500 dark:text-blue-400" : "text-slate-400 dark:text-slate-500")} />
-        <h3 className="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-2">{t('dropFile')}</h3>
+        <h3 className="text-lg sm:text-xl font-semibold text-slate-700 dark:text-slate-200 mb-2 sm:whitespace-nowrap">{t('dropFile')}</h3>
         <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">{t('orClick')}</p>
         
         <label className="relative" onClick={(e) => e.stopPropagation()}>
@@ -102,6 +120,7 @@ export function FileUpload({ onDataParsed }: FileUploadProps) {
             type="file" 
             ref={fileInputRef}
             title=""
+            multiple
             accept=".csv,text/csv" 
             onChange={handleFileChange} 
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"

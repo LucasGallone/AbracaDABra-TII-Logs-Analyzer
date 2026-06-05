@@ -768,12 +768,12 @@ export function MobileCoverageMap({
                     <CircleMarker
                       key={`sfn-${p.lat}-${p.lon}-${selectedTx || 'all'}`}
                       center={[p.lat, p.lon]}
-                      radius={10}
+                      radius={7}
                       interactive={false}
                       pathOptions={{
                         fill: false,
                         color: '#ef4444',
-                        weight: 3,
+                        weight: 8,
                         stroke: true
                       }}
                     />

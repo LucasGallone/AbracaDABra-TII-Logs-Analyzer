@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Popup, useMap, useMapEvents, Polyline, Marker, LayersControl } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, Popup, useMap, useMapEvents, Polyline, Marker, LayersControl, Polygon } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MobileMultiplexStat, MobilePoint, MobileTransmitterStat } from '../types';
 import { useAppContext } from '../contexts/AppContext';
-import { Layers, Navigation, X, Maximize2, Minimize2, LocateFixed, ChevronDown } from 'lucide-react';
+import { Layers, Navigation, X, Maximize2, Minimize2, LocateFixed, ChevronDown, Check } from 'lucide-react';
 import L from 'leaflet';
 import { ElevationProfile, MAP_TILES } from './CoverageMap';
 import { sortChannels } from '../lib/utils';
@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import { enUS, fr } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'motion/react';
 import { TruncatedText } from './TruncatedText';
+import { HeatmapLayer } from './HeatmapLayer';
 
 // Custom icons
 const txIcon = new L.Icon({
@@ -82,6 +83,32 @@ function RecenterMap({ bounds }: { bounds: L.LatLngBoundsExpression | null }) {
   return null;
 }
 
+function deg2rad(deg: number) {
+  return deg * (Math.PI/180);
+}
+
+function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1); 
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2); 
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+  return R * c;
+}
+
+function getBearing(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const dLon = deg2rad(lon2 - lon1);
+  const l1 = deg2rad(lat1);
+  const l2 = deg2rad(lat2);
+  const y = Math.sin(dLon) * Math.cos(l2);
+  const x = Math.cos(l1) * Math.sin(l2) - Math.sin(l1) * Math.cos(l2) * Math.cos(dLon);
+  const brng = Math.atan2(y, x);
+  return (brng * 180 / Math.PI + 360) % 360;
+}
+
 export function MobileCoverageMap({ 
   multiplex, 
   timeZoneStr,
@@ -96,15 +123,97 @@ export function MobileCoverageMap({
   const { t, theme, language } = useAppContext();
   const dateLocale = language === 'fr' ? fr : enUS;
   const [selectedTx, setSelectedTx] = useState<string | null>(null);
-  const [colorMode, setColorMode] = useState<'snr' | 'level'>('snr');
+  const [colorMode, setColorMode] = useState<'snr' | 'level'>(() => {
+    const saved = localStorage.getItem('map_colorMode');
+    return saved === 'level' || saved === 'snr' ? saved : 'snr';
+  });
   const [activeLine, setActiveLine] = useState<{ pointLat: number, pointLon: number, txLat: number, txLon: number } | null>(null);
-  const [selectedPoint, setSelectedPoint] = useState<(MobilePoint & { renderColor: string, txData: any }) | null>(null);
+  const [selectedPoint, setSelectedPoint] = useState<(MobilePoint & { renderColor: string, txData: any, hasSfnConflict: boolean }) | null>(null);
   const [isMuxDropdownOpen, setIsMuxDropdownOpen] = useState(false);
   const [mapPickerOpen, setMapPickerOpen] = useState(false);
-  const [mapType, setMapType] = useState(MAP_TILES[0].id);
+  const [mapType, setMapType] = useState(() => {
+    const saved = localStorage.getItem('map_mapType');
+    return saved || MAP_TILES[0].id;
+  });
   const [mapZoom, setMapZoom] = useState(10);
+  const [showPoints, setShowPoints] = useState(() => {
+    const saved = localStorage.getItem('map_showPoints');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [showHeatmap, setShowHeatmap] = useState(() => {
+    const saved = localStorage.getItem('map_showHeatmap');
+    return saved !== null ? saved === 'true' : false;
+  });
+  const [showPolygons, setShowPolygons] = useState(() => {
+    const saved = localStorage.getItem('map_showPolygons');
+    return saved !== null ? saved === 'true' : false;
+  });
+  const [showSfnConflicts, setShowSfnConflicts] = useState(() => {
+    const saved = localStorage.getItem('map_showSfnConflicts');
+    return saved !== null ? saved === 'true' : false;
+  });
+  const [snrFilterEnabled, setSnrFilterEnabled] = useState(() => {
+    const saved = localStorage.getItem('map_snrFilterEnabled');
+    return saved !== null ? saved === 'true' : false;
+  });
+  const [snrFilterThreshold, setSnrFilterThreshold] = useState<string>(() => {
+    const saved = localStorage.getItem('map_snrFilterThreshold');
+    return saved !== null ? saved : '';
+  });
+  const [snrFilterDirection, setSnrFilterDirection] = useState<'>=' | '<='>(() => {
+    const saved = localStorage.getItem('map_snrFilterDirection');
+    return saved === '>=' || saved === '<=' ? saved : '>=';
+  });
   const [topoProps, setTopoProps] = useState<{ rxCoords: [number, number], txCoords: [number, number], location: string } | null>(null);
+  const [profileHoverPoint, setProfileHoverPoint] = useState<[number, number] | null>(null);
   const prevViewRef = useRef<{ center: L.LatLng, zoom: number } | null>(null);
+  const profileZoomBeforeRef = useRef<{ center: L.LatLng, zoom: number } | null>(null);
+  const [isProfileZoomed, setIsProfileZoomed] = useState(false);
+  const [isProfileObstructed, setIsProfileObstructed] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('map_colorMode', colorMode);
+  }, [colorMode]);
+  
+  useEffect(() => {
+    localStorage.setItem('map_mapType', mapType);
+  }, [mapType]);
+
+  useEffect(() => {
+    localStorage.setItem('map_showPoints', String(showPoints));
+  }, [showPoints]);
+
+  useEffect(() => {
+    localStorage.setItem('map_showHeatmap', String(showHeatmap));
+  }, [showHeatmap]);
+
+  useEffect(() => {
+    localStorage.setItem('map_showPolygons', String(showPolygons));
+  }, [showPolygons]);
+
+  useEffect(() => {
+    localStorage.setItem('map_showSfnConflicts', String(showSfnConflicts));
+  }, [showSfnConflicts]);
+
+  useEffect(() => {
+    localStorage.setItem('map_snrFilterEnabled', String(snrFilterEnabled));
+  }, [snrFilterEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem('map_snrFilterThreshold', snrFilterThreshold);
+  }, [snrFilterThreshold]);
+
+  useEffect(() => {
+    localStorage.setItem('map_snrFilterDirection', snrFilterDirection);
+  }, [snrFilterDirection]);
+
+  useEffect(() => {
+    if (!topoProps) {
+      setIsProfileZoomed(false);
+      setIsProfileObstructed(false);
+      profileZoomBeforeRef.current = null;
+    }
+  }, [topoProps]);
   
   const mapRef = useRef<L.Map>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -138,24 +247,104 @@ export function MobileCoverageMap({
   }, [multiplex]);
 
   // Filter and prepare points to render
-  const renderPoints = multiplex.points.map(point => {
-    if (selectedTx) {
-      const txData = point.transmitters.find(t => t.tii === selectedTx);
-      if (txData) {
+  const renderPoints = React.useMemo(() => {
+    return multiplex.points
+      .filter(point => {
+        if (snrFilterEnabled && snrFilterThreshold !== '') {
+          const thresh = parseFloat(snrFilterThreshold);
+          if (!isNaN(thresh)) {
+            if (snrFilterDirection === '>=' && point.snr < thresh) return false;
+            if (snrFilterDirection === '<=' && point.snr > thresh) return false;
+          }
+        }
+        return true;
+      })
+      .map(point => {
+        let hasSfnConflict = false;
+        
+        if (showSfnConflicts && point.transmitters.length > 1) {
+          const maxLevel = Math.max(...point.transmitters.map(t => t.level));
+          const maxLevelTx = point.transmitters.find(t => t.level === maxLevel);
+          if (maxLevelTx) {
+            hasSfnConflict = point.transmitters.some(tx => 
+              tx.tii !== maxLevelTx.tii && 
+              Math.abs(tx.distance - maxLevelTx.distance) >= 74 && 
+              tx.level >= maxLevel - 15
+            );
+          }
+        }
+
+        if (selectedTx) {
+          const txData = point.transmitters.find(t => t.tii === selectedTx);
+          if (txData) {
+            return {
+              ...point,
+              renderColor: colorMode === 'level' ? getMapLevelColor(txData.level) : getMapSnrColor(point.snr),
+              txData: txData,
+              hasSfnConflict
+            };
+          }
+          return null;
+        }
         return {
           ...point,
-          renderColor: colorMode === 'level' ? getMapLevelColor(txData.level) : getMapSnrColor(point.snr),
-          txData: txData
+          renderColor: getMapSnrColor(point.snr),
+          txData: null,
+          hasSfnConflict
         };
+      }).filter(p => p !== null) as (MobilePoint & { renderColor: string, txData: any, hasSfnConflict: boolean })[];
+  }, [multiplex, selectedTx, colorMode, showSfnConflicts, snrFilterEnabled, snrFilterThreshold, snrFilterDirection]);
+
+  const coveragePolygons = React.useMemo(() => {
+    if (!showPolygons || !multiplex || !multiplex.transmitters || !multiplex.points) return [];
+    
+    const polygons: { tii: string; coords: [number, number][]; fillColor: string; }[] = [];
+    
+    const transmittersToProcess = selectedTx 
+      ? multiplex.transmitters.filter(t => t.tii === selectedTx)
+      : multiplex.transmitters;
+
+    for (const tx of transmittersToProcess) {
+      if (!tx.lat || !tx.lon) continue;
+
+      const bins = new Map<number, { distance: number, coord: [number, number] }>();
+      
+      for (let i = 0; i < 360; i += 10) {
+        bins.set(i, { distance: 0, coord: [tx.lat, tx.lon] }); // Fallback to TX location
       }
-      return null;
+
+      for (const point of multiplex.points) {
+        const txData = point.transmitters.find(t => t.tii === tx.tii);
+        if (txData) {
+          const bearing = getBearing(tx.lat, tx.lon, point.lat, point.lon); 
+          const distance = getDistanceFromLatLonInKm(tx.lat, tx.lon, point.lat, point.lon);
+
+          const binKey = Math.floor(bearing / 10) * 10;
+          const currentMax = bins.get(binKey);
+
+          if (currentMax && distance > currentMax.distance) {
+            bins.set(binKey, { distance: distance, coord: [point.lat, point.lon] });
+          }
+        }
+      }
+
+      const coords: [number, number][] = [];
+      for (let i = 0; i < 360; i += 10) {
+        const b = bins.get(i);
+        if (b) {
+          coords.push(b.coord);
+        }
+      }
+
+      polygons.push({
+        tii: tx.tii,
+        coords: coords,
+        fillColor: '#3b82f6'
+      });
     }
-    return {
-      ...point,
-      renderColor: getMapSnrColor(point.snr),
-      txData: null
-    };
-  }).filter(p => p !== null) as (MobilePoint & { renderColor: string, txData: any })[];
+
+    return polygons;
+  }, [multiplex, selectedTx, showPolygons]);
 
   const selectedTxStat = multiplex.transmitters.find(t => t.tii === selectedTx);
 
@@ -285,7 +474,39 @@ export function MobileCoverageMap({
                rxCoords={topoProps.rxCoords} 
                txCoords={topoProps.txCoords} 
                location={topoProps.location} 
-               onClose={() => setTopoProps(null)} 
+               isProfileZoomed={isProfileZoomed} 
+               onClose={() => {
+                 setTopoProps(null);
+                 setProfileHoverPoint(null);
+                 setIsProfileZoomed(false);
+                 setIsProfileObstructed(false);
+                 profileZoomBeforeRef.current = null;
+                 if (prevViewRef.current && mapRef.current) {
+                   mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom);
+                   prevViewRef.current = null;
+                 }
+               }}
+               onHoverPoint={setProfileHoverPoint}
+               onObstructionChange={setIsProfileObstructed}
+               onClickPoint={(coords) => {
+                 if (!mapRef.current) return;
+                 if (isProfileZoomed) {
+                   if (profileZoomBeforeRef.current) {
+                     mapRef.current.setView(profileZoomBeforeRef.current.center, profileZoomBeforeRef.current.zoom);
+                   } else if (prevViewRef.current) {
+                     mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom);
+                   }
+                   setIsProfileZoomed(false);
+                   profileZoomBeforeRef.current = null;
+                 } else {
+                   profileZoomBeforeRef.current = {
+                     center: mapRef.current.getCenter(),
+                     zoom: mapRef.current.getZoom()
+                   };
+                   mapRef.current.setView(coords, 15);
+                   setIsProfileZoomed(true);
+                 }
+               }}
              />
           )}
           
@@ -316,7 +537,7 @@ export function MobileCoverageMap({
              </button>
              
              {mapPickerOpen && (
-               <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-[#313338] border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl pointer-events-auto overflow-hidden">
+               <div className="absolute top-full right-0 mt-2 w-64 bg-white dark:bg-[#313338] border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl pointer-events-auto overflow-hidden">
                  <div className="p-2 space-y-1">
                    {MAP_TILES.map(tile => (
                      <label key={tile.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-md cursor-pointer transition-colors group">
@@ -333,6 +554,98 @@ export function MobileCoverageMap({
                         </span>
                      </label>
                    ))}
+                   <div className="border-t border-slate-200 dark:border-slate-700 my-1"></div>
+                   <label className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-md cursor-pointer transition-colors group">
+                      <div className={`w-4 h-4 rounded border ${showPoints ? 'border-4 border-blue-500 bg-white' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 group-hover:border-blue-400'} flex items-center justify-center transition-colors shrink-0`} />
+                      <input 
+                        type="checkbox" 
+                        className="hidden"
+                        checked={showPoints} 
+                        onChange={() => setShowPoints(!showPoints)} 
+                      />
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
+                        {t('layerPoints')}
+                      </span>
+                   </label>
+                   <label className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-md cursor-pointer transition-colors group">
+                      <div className={`w-4 h-4 rounded border ${showHeatmap ? 'border-4 border-blue-500 bg-white' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 group-hover:border-blue-400'} flex items-center justify-center transition-colors shrink-0`} />
+                      <input 
+                        type="checkbox" 
+                        className="hidden"
+                        checked={showHeatmap} 
+                        onChange={() => setShowHeatmap(!showHeatmap)} 
+                      />
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
+                        {t('layerHeatmap')}
+                      </span>
+                   </label>
+                   <label className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-md cursor-pointer transition-colors group">
+                      <div className={`w-4 h-4 rounded border ${showPolygons ? 'border-4 border-blue-500 bg-white' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 group-hover:border-blue-400'} flex items-center justify-center transition-colors shrink-0`} />
+                      <input 
+                        type="checkbox" 
+                        className="hidden"
+                        checked={showPolygons} 
+                        onChange={() => setShowPolygons(!showPolygons)} 
+                      />
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
+                        {t('layerHeatmapPoly')}
+                      </span>
+                   </label>
+
+                   <div className="h-px bg-slate-200 dark:bg-slate-700/60 my-1 mx-2" />
+
+                   <label className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-md cursor-pointer transition-colors group">
+                      <div className={`w-4 h-4 rounded border ${showSfnConflicts ? 'border-4 border-red-500 bg-white' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 group-hover:border-red-400'} flex items-center justify-center transition-colors shrink-0`} />
+                      <input 
+                        type="checkbox" 
+                        className="hidden"
+                        checked={showSfnConflicts} 
+                        onChange={() => setShowSfnConflicts(!showSfnConflicts)} 
+                      />
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
+                        {t('layerSFNConflicts')}
+                      </span>
+                   </label>
+
+                   <div className="h-px bg-slate-200 dark:bg-slate-700/60 my-1 mx-2" />
+
+                   <div className="p-2 space-y-2">
+                     <label className="flex items-center gap-3 cursor-pointer group">
+                        <div className={`w-4 h-4 rounded border ${snrFilterEnabled ? 'border-4 border-blue-500 bg-white' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 group-hover:border-blue-400'} flex items-center justify-center transition-colors shrink-0`} />
+                        <input 
+                          type="checkbox" 
+                          className="hidden"
+                          checked={snrFilterEnabled} 
+                          onChange={() => setSnrFilterEnabled(!snrFilterEnabled)} 
+                        />
+                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
+                          {t('snrFilter')}
+                        </span>
+                     </label>
+                     
+                     {snrFilterEnabled && (
+                       <div className="flex items-center gap-2 pl-7">
+                         <select 
+                           value={snrFilterDirection}
+                           onChange={(e) => setSnrFilterDirection(e.target.value as '>=' | '<=')}
+                           className="text-xs shrink-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded px-1.5 py-1 text-slate-700 dark:text-slate-300 focus:outline-none focus:border-blue-500"
+                         >
+                           <option value=">=">{t('higherThan')}</option>
+                           <option value="<=">{t('lowerThan')}</option>
+                         </select>
+                         <div className="relative flex items-center w-20">
+                           <input
+                             type="number"
+                             maxLength={4}
+                             value={snrFilterThreshold}
+                             onChange={(e) => setSnrFilterThreshold(e.target.value.substring(0, 4))}
+                             className="text-xs w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded pl-2 pr-6 py-1 text-slate-700 dark:text-slate-300 focus:outline-none focus:border-blue-500 text-right font-medium"
+                           />
+                           <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 absolute right-2 pointer-events-none">dB</span>
+                         </div>
+                       </div>
+                     )}
+                   </div>
                  </div>
                </div>
              )}
@@ -395,7 +708,18 @@ export function MobileCoverageMap({
                 ]} 
                 color="#3b82f6" 
                 weight={3} 
-                dashArray="5, 10" 
+                opacity={0.7} 
+              />
+            )}
+
+            {topoProps && !activeLine && (
+              <Polyline 
+                positions={[
+                  [topoProps.rxCoords[0], topoProps.rxCoords[1]],
+                  [topoProps.txCoords[0], topoProps.txCoords[1]]
+                ]} 
+                color="#3b82f6" 
+                weight={3} 
                 opacity={0.7} 
               />
             )}
@@ -406,20 +730,54 @@ export function MobileCoverageMap({
                  center={[activeLine.txLat, activeLine.txLon]}
                  radius={8}
                  pathOptions={{ fillColor: "#3b82f6", color: "#ffffff", weight: 2, fillOpacity: 1 }}
-               >
-               </CircleMarker>
+               />
             )}
 
-            {renderPoints.map((p, idx) => {
+
+
+            {profileHoverPoint && (
+               <CircleMarker 
+                 center={profileHoverPoint}
+                 radius={8}
+                 pathOptions={{ fillColor: isProfileObstructed ? "#ef4444" : "#22c55e", color: "#ffffff", weight: 2, fillOpacity: 1 }}
+               />
+            )}
+
+            {showHeatmap && (
+              <HeatmapLayer points={renderPoints} colorMode={colorMode} />
+            )}
+
+            {showPolygons && coveragePolygons.map((poly, idx) => (
+               <Polygon
+                 key={`poly-${poly.tii}-${idx}`}
+                 positions={poly.coords}
+                 pathOptions={{ 
+                   fillColor: poly.fillColor, 
+                   fillOpacity: 0.2, 
+                   color: poly.fillColor, 
+                   weight: 1,
+                   opacity: 0.6
+                 }}
+               />
+            ))}
+
+            {showPoints && renderPoints.map((p, idx) => {
               const isSelected = selectedPoint && selectedPoint.lat === p.lat && selectedPoint.lon === p.lon && selectedPoint.timeMs === p.timeMs;
               const fillColor = isSelected ? '#a855f7' : p.renderColor;
               
               return (
               <CircleMarker
-                key={`${p.lat}-${p.lon}-${colorMode}-${selectedTx || 'all'}-${mapZoom >= 13}`}
+                key={`${p.lat}-${p.lon}-${colorMode}-${selectedTx || 'all'}-${mapZoom >= 13}-${p.hasSfnConflict}`}
                 center={[p.lat, p.lon]}
                 radius={7} 
-                pathOptions={{ fillColor: fillColor, color: 'rgba(0,0,0,0.5)', weight: mapZoom >= 13 ? 1.5 : 0, stroke: mapZoom >= 13, fillOpacity: 0.9 }}
+                pathOptions={{ 
+                  fillColor: fillColor, 
+                  color: p.hasSfnConflict ? '#ef4444' : 'rgba(0,0,0,0.5)', 
+                  weight: p.hasSfnConflict ? 3 : (mapZoom >= 13 ? 1.5 : 0), 
+                  stroke: p.hasSfnConflict || mapZoom >= 13, 
+                  fillOpacity: 0.9,
+                  className: p.hasSfnConflict ? 'sfn-pulse' : undefined
+                }}
                 eventHandlers={{ click: (e) => {
                    if (e && e.originalEvent) {
                      L.DomEvent.stopPropagation(e.originalEvent);
@@ -445,45 +803,63 @@ export function MobileCoverageMap({
           >
             <div className="font-sans flex flex-col gap-3 p-4">
               {/* Header: Date, Time & Mux Info */}
-              <div className="flex justify-between items-start gap-3 pb-3 border-b border-slate-200 dark:border-slate-700/50">
-                <div className="flex flex-col gap-1 pr-2 relative flex-1">
-                  <span className="font-bold text-[17px] text-slate-900 dark:text-white leading-tight whitespace-nowrap">
-                    {multiplex.channel} - {multiplex.label}
-                  </span>
-                  <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 tracking-wide uppercase mt-0.5">
-                    {selectedPoint.transmitters.length} {selectedPoint.transmitters.length > 1 ? t('txReceivedPlural') : t('txReceivedSingular')}
-                  </span>
+              <div className="flex flex-col gap-3 pb-3 border-b border-slate-200 dark:border-slate-700/50">
+                <div className="flex justify-between items-start gap-3">
+                  <div className="flex flex-col gap-1 pr-2 relative flex-1">
+                    <span className="font-bold text-[17px] text-slate-900 dark:text-white leading-tight whitespace-nowrap">
+                      {multiplex.channel} - {multiplex.label}
+                    </span>
+                    <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 tracking-wide uppercase mt-0.5">
+                      {selectedPoint.transmitters.length} {selectedPoint.transmitters.length > 1 ? t('txReceivedPlural') : t('txReceivedSingular')}
+                    </span>
+                  </div>
+                  {/* Top right container for SNR and Close */}
+                  <div className="flex flex-col items-end shrink-0 gap-1.5 pt-0.5">
+                     {/* Close button first */}
+                     <button
+                       onClick={(e) => {
+                         e.stopPropagation();
+                         setSelectedPoint(null);
+                         setActiveLine(null);
+                       }}
+                       className="p-1 -mr-1.5 -mt-1.5 text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200 rounded transition-colors"
+                     >
+                       <X className="w-5 h-5" />
+                     </button>
+                     {/* Then SNR */}
+                     <div className="flex items-center gap-1.5">
+                       <span className="text-[9px] text-slate-500 dark:text-slate-300 font-bold uppercase tracking-wider">{t('muxSnr').replace(':', '')}</span>
+                       <span className="font-bold px-2.5 py-1.5 rounded-lg text-white text-sm shadow-sm whitespace-nowrap" style={{ backgroundColor: getSnrColor(selectedPoint.snr) }}>
+                         {selectedPoint.snr.toFixed(1)} dB
+                       </span>
+                     </div>
+                  </div>
                 </div>
-                {/* Top right container for SNR and Close */}
-                <div className="flex flex-col items-end shrink-0 gap-1.5 pt-0.5">
-                   {/* Close button first */}
-                   <button
-                     onClick={(e) => {
-                       e.stopPropagation();
-                       setSelectedPoint(null);
-                       setActiveLine(null);
-                     }}
-                     className="p-1 -mr-1.5 -mt-1.5 text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200 rounded transition-colors"
-                   >
-                     <X className="w-5 h-5" />
-                   </button>
-                   {/* Then SNR */}
-                   <div className="flex items-center gap-1.5">
-                     <span className="text-[9px] text-slate-500 dark:text-slate-300 font-bold uppercase tracking-wider">{t('muxSnr').replace(':', '')}</span>
-                     <span className="font-bold px-2.5 py-1.5 rounded-lg text-white text-sm shadow-sm whitespace-nowrap" style={{ backgroundColor: getSnrColor(selectedPoint.snr) }}>
-                       {selectedPoint.snr.toFixed(1)} dB
-                     </span>
-                   </div>
-                </div>
+                
+                {selectedPoint.hasSfnConflict && (
+                  <div className="flex items-center justify-center px-1.5 py-1.5 bg-red-100 dark:bg-opacity-10 text-red-700 dark:text-red-400 font-semibold text-[11px] rounded border border-red-200 dark:border-red-500/20 shadow-sm w-full">
+                    {t('sfnConflictWarning')}
+                  </div>
+                )}
               </div>
 
               {/* Transmitters List */}
-              {!selectedTx ? (
+              {!selectedTx ? (() => {
+                const maxLevel = selectedPoint.transmitters.length > 0 ? Math.max(...selectedPoint.transmitters.map(t => t.level)) : 0;
+                const maxLevelTx = selectedPoint.transmitters.find(t => t.level === maxLevel);
+                return (
                 <div className="flex flex-col gap-3">
                   {selectedPoint.transmitters.length === 0 ? (
                      <div className="text-xs text-slate-500 italic py-2 text-center bg-white dark:bg-slate-800/30 rounded-lg">{t('noTxDecoded')}</div>
                   ) : (
-                    [...selectedPoint.transmitters].sort((a,b) => b.level - a.level).map(tx => (
+                    [...selectedPoint.transmitters].sort((a,b) => b.level - a.level).map(tx => {
+                      let isConflictTx = false;
+                      if (selectedPoint.hasSfnConflict && maxLevelTx && tx.tii !== maxLevelTx.tii) {
+                        if (Math.abs(tx.distance - maxLevelTx.distance) >= 74 && tx.level >= maxLevel - 15) {
+                          isConflictTx = true;
+                        }
+                      }
+                      return (
                       <div key={tx.tii} className="bg-white dark:bg-slate-800/80 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-sm flex flex-col gap-3 transition-colors">
                         <div className="flex justify-between items-start gap-3">
                           <div className="flex flex-col gap-1 flex-1 min-w-0">
@@ -508,9 +884,19 @@ export function MobileCoverageMap({
                               <div><span className="font-medium text-slate-500">{t('tiiCodeField')}</span> <span className="font-medium text-slate-800 dark:text-slate-200">{tx.tii}</span></div>
                             </div>
                           </div>
-                          <span className="font-bold text-sm px-2.5 py-1 bg-slate-50 dark:bg-slate-900/50 rounded-lg whitespace-nowrap border border-slate-100 dark:border-slate-700/50 shrink-0" style={{ color: getLevelColor(tx.level) }}>
-                            {tx.level.toFixed(1)} dB
-                          </span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {isConflictTx && (
+                              <span 
+                                className="text-lg leading-none cursor-help"
+                                title={t('sfnConflictTooltip')}
+                              >
+                                ⚠️
+                              </span>
+                            )}
+                            <span className="font-bold text-sm px-2.5 py-1 bg-slate-50 dark:bg-slate-900/50 rounded-lg whitespace-nowrap border border-slate-100 dark:border-slate-700/50" style={{ color: getLevelColor(tx.level) }}>
+                              {tx.level.toFixed(1)} dB
+                            </span>
+                          </div>
                         </div>
                         {tx.lat && tx.lon && (
                           <div className="flex gap-2 border-t border-slate-200 dark:border-slate-700/50 pt-3">
@@ -551,24 +937,54 @@ export function MobileCoverageMap({
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setTopoProps({
-                                  rxCoords: [selectedPoint.lat, selectedPoint.lon],
-                                  txCoords: [tx.lat!, tx.lon!],
-                                  location: tx.location || t('unknownSite')
-                                });
+                                if (topoProps?.rxCoords[0] === selectedPoint.lat && topoProps?.rxCoords[1] === selectedPoint.lon && topoProps?.txCoords[0] === tx.lat) {
+                                  setTopoProps(null);
+                                  setProfileHoverPoint(null);
+                                  if (prevViewRef.current && mapRef.current) {
+                                    mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom);
+                                    prevViewRef.current = null;
+                                  }
+                                } else {
+                                  if (mapRef.current && !prevViewRef.current) {
+                                    prevViewRef.current = { center: mapRef.current.getCenter(), zoom: mapRef.current.getZoom() };
+                                  }
+                                  if (mapRef.current) {
+                                    mapRef.current.fitBounds([
+                                      [selectedPoint.lat, selectedPoint.lon],
+                                      [tx.lat, tx.lon]
+                                    ], { padding: [50, 50] });
+                                  }
+                                  setTopoProps({
+                                    rxCoords: [selectedPoint.lat, selectedPoint.lon],
+                                    txCoords: [tx.lat!, tx.lon!],
+                                    location: tx.location || t('unknownSite')
+                                  });
+                                }
                               }}
-                              className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-amber-50 dark:bg-amber-900/40 hover:bg-amber-100 dark:hover:bg-amber-800/60 text-amber-700 dark:text-amber-300 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap"
+                              className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${topoProps?.rxCoords[0] === selectedPoint.lat && topoProps?.txCoords[0] === tx.lat ? 'bg-amber-200 dark:bg-amber-800/80 text-amber-800 dark:text-amber-200 hover:bg-amber-300 dark:hover:bg-amber-700' : 'bg-amber-50 dark:bg-amber-900/40 hover:bg-amber-100 dark:hover:bg-amber-800/60 text-amber-700 dark:text-amber-300'}`}
                             >
                               {t('topoProfile')}
                             </button>
                           </div>
                         )}
                       </div>
-                    ))
+                    );
+                   })
                   )}
-                </div>
-              ) : (
-                <div className="flex flex-col gap-3">
+                 </div>
+               ); })() : (() => {
+                 let isConflictTx = false;
+                 if (selectedPoint.txData && selectedPoint.hasSfnConflict) {
+                   const maxLevel = selectedPoint.transmitters.length > 0 ? Math.max(...selectedPoint.transmitters.map(t => t.level)) : 0;
+                   const maxLevelTx = selectedPoint.transmitters.find(t => t.level === maxLevel);
+                   if (maxLevelTx && selectedPoint.txData.tii !== maxLevelTx.tii) {
+                     if (Math.abs(selectedPoint.txData.distance - maxLevelTx.distance) >= 74 && selectedPoint.txData.level >= maxLevel - 15) {
+                       isConflictTx = true;
+                     }
+                   }
+                 }
+                 return (
+                 <div className="flex flex-col gap-3">
                   {selectedPoint.txData && (
                     <div className="bg-white dark:bg-slate-800/80 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-sm flex flex-col gap-3 transition-colors">
                       <div className="flex justify-between items-start gap-3">
@@ -592,9 +1008,19 @@ export function MobileCoverageMap({
                             <div><span className="font-medium text-slate-500">{t('tiiCodeField')}</span> <span className="font-medium text-slate-800 dark:text-slate-200">{selectedPoint.txData.tii}</span></div>
                           </div>
                         </div>
-                        <span className="font-bold text-sm px-2.5 py-1 bg-slate-50 dark:bg-slate-900/50 rounded-lg whitespace-nowrap border border-slate-100 dark:border-slate-700/50 shrink-0" style={{ color: getLevelColor(selectedPoint.txData.level) }}>
-                          {selectedPoint.txData.level.toFixed(1)} dB
-                        </span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {isConflictTx && (
+                            <span 
+                              className="text-lg leading-none cursor-help"
+                              title={t('sfnConflictTooltip')}
+                            >
+                              ⚠️
+                            </span>
+                          )}
+                          <span className="font-bold text-sm px-2.5 py-1 bg-slate-50 dark:bg-slate-900/50 rounded-lg whitespace-nowrap border border-slate-100 dark:border-slate-700/50" style={{ color: getLevelColor(selectedPoint.txData.level) }}>
+                            {selectedPoint.txData.level.toFixed(1)} dB
+                          </span>
+                        </div>
                       </div>
                       
                       {selectedPoint.txData.lat && selectedPoint.txData.lon && (
@@ -636,13 +1062,31 @@ export function MobileCoverageMap({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              setTopoProps({
-                                rxCoords: [selectedPoint.lat, selectedPoint.lon],
-                                txCoords: [selectedPoint.txData!.lat!, selectedPoint.txData!.lon!],
-                                location: selectedPoint.txData!.location || t('unknownSite')
-                              });
+                              if (topoProps?.rxCoords[0] === selectedPoint.lat && topoProps?.rxCoords[1] === selectedPoint.lon && topoProps?.txCoords[0] === selectedPoint.txData!.lat) {
+                                setTopoProps(null);
+                                setProfileHoverPoint(null);
+                                if (prevViewRef.current && mapRef.current) {
+                                  mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom);
+                                  prevViewRef.current = null;
+                                }
+                              } else {
+                                if (mapRef.current && !prevViewRef.current) {
+                                  prevViewRef.current = { center: mapRef.current.getCenter(), zoom: mapRef.current.getZoom() };
+                                }
+                                if (mapRef.current) {
+                                  mapRef.current.fitBounds([
+                                    [selectedPoint.lat, selectedPoint.lon],
+                                    [selectedPoint.txData!.lat!, selectedPoint.txData!.lon!]
+                                  ], { padding: [50, 50] });
+                                }
+                                setTopoProps({
+                                  rxCoords: [selectedPoint.lat, selectedPoint.lon],
+                                  txCoords: [selectedPoint.txData!.lat!, selectedPoint.txData!.lon!],
+                                  location: selectedPoint.txData!.location || t('unknownSite')
+                                });
+                              }
                             }}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-amber-50 dark:bg-amber-900/40 hover:bg-amber-100 dark:hover:bg-amber-800/60 text-amber-700 dark:text-amber-300 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap"
+                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${topoProps?.rxCoords[0] === selectedPoint.lat && topoProps?.txCoords[0] === selectedPoint.txData!.lat ? 'bg-amber-200 dark:bg-amber-800/80 text-amber-800 dark:text-amber-200 hover:bg-amber-300 dark:hover:bg-amber-700' : 'bg-amber-50 dark:bg-amber-900/40 hover:bg-amber-100 dark:hover:bg-amber-800/60 text-amber-700 dark:text-amber-300'}`}
                           >
                             {t('topoProfile')}
                           </button>
@@ -651,7 +1095,7 @@ export function MobileCoverageMap({
                     </div>
                   )}
                 </div>
-              )}
+              ); })()}
 
               {selectedPoint.timeMs && (
                 <div className="flex justify-between items-center pt-3 mt-1 border-t border-slate-200 dark:border-slate-700/50">

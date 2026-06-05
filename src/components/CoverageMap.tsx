@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents, LayersControl } from 'react-leaflet';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents, LayersControl, CircleMarker } from 'react-leaflet';
 import { Mountain, X, Radio, RadioTower, Filter, Check, Layers } from 'lucide-react';
 import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import L from 'leaflet';
@@ -35,14 +35,13 @@ const txIcon = new L.Icon({
   shadowSize: [41, 41]
 });
 
-// Helper component to adjust map bounds
-function BoundsUpdater({ bounds }: { bounds: L.LatLngBounds }) {
+function BoundsUpdater({ bounds, disabled }: { bounds: L.LatLngBounds; disabled?: boolean }) {
   const map = useMap();
   useEffect(() => {
-    if (bounds.isValid()) {
+    if (bounds.isValid() && !disabled) {
       map.fitBounds(bounds, { padding: [50, 50] });
     }
-  }, [map, bounds]);
+  }, [map, bounds, disabled]);
 
   useEffect(() => {
     const handleReset = () => {
@@ -113,8 +112,35 @@ const ClassicRadioIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export function ElevationProfile({ rxCoords, txCoords, location, onClose }: { rxCoords: [number, number]; txCoords: [number, number]; location: string; onClose: () => void; }) {
+function ProfileTooltip({ active, payload, label, language, onHoverPoint }: any) {
+  const lat = active && payload && payload.length ? Number(payload[0].payload.lat) : null;
+  const lon = active && payload && payload.length ? Number(payload[0].payload.lon) : null;
+
+  useEffect(() => {
+    if (lat !== null && lon !== null) {
+       if (onHoverPoint) onHoverPoint([lat, lon]);
+    } else {
+       if (onHoverPoint) onHoverPoint(null);
+    }
+  }, [lat, lon]);
+
+  if (active && payload && payload.length) {
+    const elev = payload.find((p: any) => p.dataKey === 'elevation');
+    if (elev) {
+      return (
+        <div style={{ fontSize: '12px', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: '#ffffff', color: '#0f172a', padding: '10px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', pointerEvents: 'none' }}>
+          <p style={{ margin: 0, marginBottom: '5px', fontWeight: 600 }}>{label} km</p>
+          <p style={{ margin: 0, color: '#3b82f6' }}>Altitude{language === 'fr' ? ' : ' : ': '}{Math.round(Number(elev.value))}m</p>
+        </div>
+      );
+    }
+  }
+  return null;
+}
+
+export function ElevationProfile({ rxCoords, txCoords, location, onClose, onHoverPoint, onClickPoint, isProfileZoomed, onObstructionChange }: { rxCoords: [number, number]; txCoords: [number, number]; location: string; onClose: () => void; onHoverPoint?: (coords: [number, number] | null) => void; onClickPoint?: (coords: [number, number]) => void; isProfileZoomed?: boolean; onObstructionChange?: (obstructed: boolean) => void; }) {
   const [rawData, setRawData] = useState<number[] | null>(null);
+  const hoveredCoordsRef = useRef<[number, number] | null>(null);
   const [rxHeight, setRxHeight] = useState('3');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -138,10 +164,17 @@ export function ElevationProfile({ rxCoords, txCoords, location, onClose }: { rx
         const steps = 50;
         const lats = [];
         const lons = [];
+        const p1 = L.CRS.EPSG3857.project(L.latLng(rxCoords[0], rxCoords[1]));
+        const p2 = L.CRS.EPSG3857.project(L.latLng(txCoords[0], txCoords[1]));
+
         for (let i = 0; i <= steps; i++) {
           const f = i / steps;
-          lats.push((rxCoords[0] + (txCoords[0] - rxCoords[0]) * f).toFixed(5));
-          lons.push((rxCoords[1] + (txCoords[1] - rxCoords[1]) * f).toFixed(5));
+          const px = p1.x + (p2.x - p1.x) * f;
+          const py = p1.y + (p2.y - p1.y) * f;
+          const latLng = L.CRS.EPSG3857.unproject(L.point(px, py));
+          
+          lats.push(latLng.lat.toFixed(5));
+          lons.push(latLng.lng.toFixed(5));
         }
         
         const res = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lats.join(',')}&longitude=${lons.join(',')}`, { signal: controller.signal });
@@ -162,7 +195,7 @@ export function ElevationProfile({ rxCoords, txCoords, location, onClose }: { rx
     };
     fetchProfile();
     return () => { active = false; };
-  }, [rxCoords, txCoords]);
+  }, [rxCoords[0], rxCoords[1], txCoords[0], txCoords[1]]);
 
   const profileData = useMemo(() => {
     if (!rawData) return null;
@@ -172,9 +205,19 @@ export function ElevationProfile({ rxCoords, txCoords, location, onClose }: { rx
     const endElev = rawData[rawData.length - 1];
     let hasObstruction = false;
     
+    const p1 = L.CRS.EPSG3857.project(L.latLng(rxCoords[0], rxCoords[1]));
+    const p2 = L.CRS.EPSG3857.project(L.latLng(txCoords[0], txCoords[1]));
+
     const chartData = rawData.map((elev: number, idx: number) => {
-      const dist = Number(((idx / steps) * totalDist).toFixed(1));
-      const expectedElev = startElev + (idx / steps) * (endElev - startElev);
+      const f = idx / steps;
+      const dist = Number((f * totalDist).toFixed(1));
+      const expectedElev = startElev + f * (endElev - startElev);
+      
+      const px = p1.x + (p2.x - p1.x) * f;
+      const py = p1.y + (p2.y - p1.y) * f;
+      const latLng = L.CRS.EPSG3857.unproject(L.point(px, py));
+      const lat = latLng.lat;
+      const lon = latLng.lng;
       
       if (idx > 0 && idx < steps && elev >= expectedElev) {
         hasObstruction = true;
@@ -183,12 +226,20 @@ export function ElevationProfile({ rxCoords, txCoords, location, onClose }: { rx
       return {
         distance: dist,
         elevation: elev,
-        lineOfSight: expectedElev
+        lineOfSight: expectedElev,
+        lat,
+        lon
       };
     });
     
     return { chartData, hasObstruction };
-  }, [rawData, rxHeight, rxCoords, txCoords]);
+  }, [rawData, rxHeight, rxCoords[0], rxCoords[1], txCoords[0], txCoords[1]]);
+
+  useEffect(() => {
+    if (onObstructionChange) {
+      onObstructionChange(profileData?.hasObstruction ?? false);
+    }
+  }, [profileData?.hasObstruction, onObstructionChange]);
 
   return (
     <div className="absolute top-4 left-14 z-[1000] w-80 shrink-0 bg-white dark:bg-[#313338] rounded-xl shadow-xl border border-slate-200 dark:border-slate-700/80 flex flex-col pointer-events-auto">
@@ -231,7 +282,7 @@ export function ElevationProfile({ rxCoords, txCoords, location, onClose }: { rx
          </div>
        </div>
 
-       <div className="p-4 h-52 bg-white dark:bg-[#313338] rounded-b-xl overflow-hidden" style={{ minHeight: '200px' }}>
+       <div className="p-4 h-52 bg-white dark:bg-[#313338] rounded-b-xl overflow-hidden cursor-pointer" style={{ minHeight: '200px' }} onClick={() => { if (onClickPoint) { if (isProfileZoomed) { onClickPoint([0, 0]); } else if (hoveredCoordsRef.current) { onClickPoint(hoveredCoordsRef.current); } } }}>
          {loading ? (
             <div className="h-full flex items-center justify-center text-slate-500 text-sm">
                {language === 'fr' ? 'Chargement...' : 'Loading...'}
@@ -246,7 +297,18 @@ export function ElevationProfile({ rxCoords, txCoords, location, onClose }: { rx
             </div>
          ) : profileData ? (
             <ResponsiveContainer width="100%" height="100%" minHeight={200} minWidth={200}>
-              <ComposedChart data={profileData.chartData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
+              <ComposedChart 
+                onMouseMove={(state: any) => {
+                  if (state && state.activePayload && state.activePayload.length && onClickPoint) {
+                    const item = state.activePayload[0].payload;
+                    if (item && item.lat !== undefined && item.lon !== undefined) {
+                      hoveredCoordsRef.current = [Number(item.lat), Number(item.lon)];
+                    }
+                  }
+                }}
+                data={profileData.chartData} 
+                onMouseLeave={() => { hoveredCoordsRef.current = null; if (onHoverPoint) onHoverPoint(null); }} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}
+              >
                 <defs>
                    <linearGradient id="colorElev" x1="0" y1="0" x2="0" y2="1">
                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
@@ -255,23 +317,7 @@ export function ElevationProfile({ rxCoords, txCoords, location, onClose }: { rx
                 </defs>
                 <XAxis dataKey="distance" type="number" textAnchor="end" tick={{fontSize: 10, fill: '#64748b'}} tickMargin={5} tickFormatter={(val) => `${val}km`} domain={['dataMin', 'dataMax']} tickCount={6} />
                 <YAxis tick={{fontSize: 10, fill: '#64748b'}} width={40} tickMargin={5} tickFormatter={(val) => `${val}m`} tickCount={5} />
-                 <RechartsTooltip 
-                  content={({ active, payload, label }) => {
-                    if (active && payload && payload.length) {
-                      const elev = payload.find(p => p.dataKey === 'elevation');
-                      const los = payload.find(p => p.dataKey === 'lineOfSight');
-                      if (elev) {
-                        return (
-                          <div style={{ fontSize: '12px', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: '#ffffff', color: '#0f172a', padding: '10px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}>
-                            <p style={{ margin: 0, marginBottom: '5px', fontWeight: 600 }}>{label} km</p>
-                            <p style={{ margin: 0, color: '#3b82f6' }}>Altitude{language === 'fr' ? ' : ' : ': '}{Math.round(Number(elev.value))}m</p>
-                          </div>
-                        );
-                      }
-                    }
-                    return null;
-                  }}
-                />
+                 <RechartsTooltip content={<ProfileTooltip language={language} onHoverPoint={(coords: any) => { hoveredCoordsRef.current = coords; if (onHoverPoint) onHoverPoint(coords); }} />} />
                 <Area type="monotone" dataKey="elevation" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorElev)" />
                 <Line type="linear" dataKey="lineOfSight" stroke={profileData.hasObstruction ? '#ef4444' : '#4ade80'} strokeWidth={3} dot={false} strokeDasharray="4 4" activeDot={false} />
               </ComposedChart>
@@ -318,11 +364,26 @@ export const MAP_TILES = [
 export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProps) {
   const { t, language } = useAppContext();
   const [selectedTxForProfile, setSelectedTxForProfile] = useState<{lat: number, lon: number, location: string} | null>(null);
+  const [profileHoverPoint, setProfileHoverPoint] = useState<[number, number] | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [mapPickerOpen, setMapPickerOpen] = useState(false);
   const [mapType, setMapType] = useState(MAP_TILES[0].id);
   const [selectedMuxKeys, setSelectedMuxKeys] = useState<Set<string>>(() => new Set(stats.multiplexes.map(m => `${m.channel}-${m.label}`)));
   const [forceShowAllMuxes, setForceShowAllMuxes] = useState(false);
+
+  const mapRef = useRef<L.Map>(null);
+  const prevViewRef = useRef<{ center: L.LatLng, zoom: number } | null>(null);
+  const profileZoomBeforeRef = useRef<{ center: L.LatLng, zoom: number } | null>(null);
+  const [isProfileZoomed, setIsProfileZoomed] = useState(false);
+  const [isProfileObstructed, setIsProfileObstructed] = useState(false);
+
+  useEffect(() => {
+    if (!selectedTxForProfile) {
+      setIsProfileZoomed(false);
+      setIsProfileObstructed(false);
+      profileZoomBeforeRef.current = null;
+    }
+  }, [selectedTxForProfile]);
 
   useEffect(() => {
     const handleCloseEvents = () => {
@@ -355,7 +416,7 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
   const { rxCoords, uniqueTransmitters, bounds } = useMemo(() => {
     let rxC: [number, number] | null = null;
     if (stats.rxLat !== undefined && stats.rxLon !== undefined && !isNaN(stats.rxLat) && !isNaN(stats.rxLon)) {
-      rxC = [stats.rxLat, stats.rxLon];
+      rxC = [Number(stats.rxLat), Number(stats.rxLon)];
     }
 
     const txMap = new Map<string, { lat: number; lon: number; location: string; altitude?: number; distance: number; azimuth?: number; muxData: { channel: string; label: string; tii: string; powerStr: string; }[] }>();
@@ -368,9 +429,11 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
     stats.multiplexes.forEach(mux => {
       mux.transmitters.forEach(tx => {
         if (tx.lat !== undefined && tx.lon !== undefined && !isNaN(tx.lat) && !isNaN(tx.lon)) {
-          const key = `${tx.lat.toFixed(5)}_${tx.lon.toFixed(5)}`;
+          const tLat = Number(tx.lat);
+          const tLon = Number(tx.lon);
+          const key = `${tLat.toFixed(5)}_${tLon.toFixed(5)}`;
           if (!txMap.has(key)) {
-            txMap.set(key, { lat: tx.lat, lon: tx.lon, location: tx.location, altitude: tx.altitude, distance: tx.distance || 0, azimuth: tx.azimuth, muxData: [] });
+            txMap.set(key, { lat: tLat, lon: tLon, location: tx.location, altitude: tx.altitude, distance: tx.distance || 0, azimuth: tx.azimuth, muxData: [] });
           }
           const entry = txMap.get(key)!;
           // Add multiplex label if not already in list
@@ -420,7 +483,39 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
           rxCoords={rxCoords} 
           txCoords={[selectedTxForProfile.lat, selectedTxForProfile.lon]} 
           location={selectedTxForProfile.location} 
-          onClose={() => setSelectedTxForProfile(null)} 
+          isProfileZoomed={isProfileZoomed} 
+          onClose={() => {
+            setSelectedTxForProfile(null);
+            setProfileHoverPoint(null);
+            setIsProfileZoomed(false);
+            setIsProfileObstructed(false);
+            profileZoomBeforeRef.current = null;
+            if (prevViewRef.current && mapRef.current) {
+              mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom);
+              prevViewRef.current = null;
+            }
+          }}
+          onHoverPoint={setProfileHoverPoint}
+          onObstructionChange={setIsProfileObstructed}
+          onClickPoint={(coords) => {
+            if (!mapRef.current) return;
+            if (isProfileZoomed) {
+              if (profileZoomBeforeRef.current) {
+                mapRef.current.setView(profileZoomBeforeRef.current.center, profileZoomBeforeRef.current.zoom);
+              } else if (prevViewRef.current) {
+                mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom);
+              }
+              setIsProfileZoomed(false);
+              profileZoomBeforeRef.current = null;
+            } else {
+              profileZoomBeforeRef.current = {
+                center: mapRef.current.getCenter(),
+                zoom: mapRef.current.getZoom()
+              };
+              mapRef.current.setView(coords, 15);
+              setIsProfileZoomed(true);
+            }
+          }}
         />
       )}
       
@@ -527,7 +622,7 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
         </div>
       </div>
 
-      <MapContainer center={center} zoom={6} className="h-full w-full">
+      <MapContainer center={center} zoom={6} className="h-full w-full" ref={mapRef}>
         <MapPopupCloser />
         <MapClickHandler onUpdateStats={onUpdateStats} rxCoords={rxCoords} />
         <TileLayer
@@ -578,8 +673,28 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
                 </div>
                 {rxCoords && (
                    <button 
-                     onClick={() => setSelectedTxForProfile({lat: tx.lat, lon: tx.lon, location: tx.location})} 
-                     className="absolute top-0 right-0 p-1.5 bg-slate-100 hover:bg-slate-200 rounded-md text-slate-700 transition-colors" 
+                     onClick={() => {
+                       if (selectedTxForProfile?.lat === tx.lat && selectedTxForProfile?.lon === tx.lon) {
+                         setSelectedTxForProfile(null);
+                         setProfileHoverPoint(null);
+                         if (prevViewRef.current && mapRef.current) {
+                           mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom);
+                           prevViewRef.current = null;
+                         }
+                       } else {
+                         if (mapRef.current && !prevViewRef.current) {
+                           prevViewRef.current = { center: mapRef.current.getCenter(), zoom: mapRef.current.getZoom() };
+                         }
+                         if (mapRef.current) {
+                           mapRef.current.fitBounds([
+                             rxCoords,
+                             [tx.lat, tx.lon]
+                           ], { padding: [50, 50] });
+                         }
+                         setSelectedTxForProfile({lat: tx.lat, lon: tx.lon, location: tx.location});
+                       }
+                     }} 
+                     className={`absolute top-0 right-0 p-1.5 rounded-md transition-colors ${selectedTxForProfile?.lat === tx.lat && selectedTxForProfile?.lon === tx.lon ? 'bg-amber-200 hover:bg-amber-300 text-amber-800' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`} 
                      title={language === 'fr' ? "Visualiser le profil topographique" : "Visualize the elevation profile"}
                    >
                      <Mountain className="w-4 h-4" />
@@ -621,7 +736,24 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
           />
         ))}
 
-        {bounds.isValid() && <BoundsUpdater bounds={bounds} />}
+        {selectedTxForProfile && rxCoords && !showLines && (
+          <Polyline 
+            positions={[rxCoords, [selectedTxForProfile.lat, selectedTxForProfile.lon]]} 
+            color="#3b82f6" 
+            weight={3} 
+            opacity={0.7} 
+          />
+        )}
+        
+        {profileHoverPoint && (
+           <CircleMarker 
+             center={profileHoverPoint}
+             radius={8}
+             pathOptions={{ fillColor: isProfileObstructed ? "#ef4444" : "#22c55e", color: "#ffffff", weight: 2, fillOpacity: 1 }}
+           />
+        )}
+
+        {bounds.isValid() && <BoundsUpdater bounds={bounds} disabled={!!selectedTxForProfile} />}
       </MapContainer>
     </div>
   );

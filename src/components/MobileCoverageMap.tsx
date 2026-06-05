@@ -786,17 +786,14 @@ export function MobileCoverageMap({
                   } }}
                 />
                 {p.hasSfnConflict && (
-                   <CircleMarker
-                     center={[p.lat, p.lon]}
-                     radius={8}
+                   <Marker
+                     position={[p.lat, p.lon]}
                      interactive={false}
-                     pathOptions={{
-                       fill: false,
-                       color: '#ef4444',
-                       weight: 3,
-                       stroke: true,
-                       className: 'sfn-pulse-stroke'
-                     }}
+                     icon={L.divIcon({
+                       className: 'sfn-pulse-divicon',
+                       iconSize: [18, 18],
+                       iconAnchor: [9, 9]
+                     })}
                    />
                 )}
               </React.Fragment>

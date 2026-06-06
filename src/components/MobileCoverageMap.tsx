@@ -724,14 +724,7 @@ export function MobileCoverageMap({
               />
             )}
 
-            {/* Render lines indicator for transmitter */}
-            {activeLine && (
-               <CircleMarker 
-                 center={[activeLine.txLat, activeLine.txLon]}
-                 radius={8}
-                 pathOptions={{ fillColor: "#3b82f6", color: "#ffffff", weight: 2, fillOpacity: 1 }}
-               />
-            )}
+
 
 
 

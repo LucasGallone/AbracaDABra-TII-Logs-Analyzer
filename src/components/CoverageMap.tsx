@@ -471,32 +471,9 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
       profileZoomBeforeRef.current = null;
 
       if (prevViewRef.current && mapRef.current) {
+        // Restore the original view without animation
         mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom, { animate: false });
         prevViewRef.current = null;
-      }
-
-      if (mapRef.current) {
-        mapRef.current.eachLayer((layer: any) => {
-          if (typeof layer.getPopup === 'function' && layer.getPopup()) {
-            const popup = layer.getPopup();
-            popup.options.autoPan = true;
-          }
-        });
-
-        setTimeout(() => {
-          if (mapRef.current) {
-            mapRef.current.eachLayer((layer: any) => {
-              if (layer instanceof L.Marker && typeof layer.isPopupOpen === 'function' && layer.isPopupOpen()) {
-                layer.closePopup();
-                setTimeout(() => {
-                  if (layer.openPopup) {
-                    layer.openPopup();
-                  }
-                }, 40);
-              }
-            });
-          }
-        }, 120);
       }
     } else {
       if (mapRef.current) {

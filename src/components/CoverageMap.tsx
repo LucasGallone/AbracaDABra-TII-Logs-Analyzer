@@ -37,9 +37,14 @@ const txIcon = new L.Icon({
 
 function BoundsUpdater({ bounds, disabled }: { bounds: L.LatLngBounds; disabled?: boolean }) {
   const map = useMap();
+  const prevBoundsRef = useRef<L.LatLngBounds | null>(null);
+
   useEffect(() => {
-    if (bounds.isValid() && !disabled) {
+    if (bounds.isValid() && !disabled && bounds !== prevBoundsRef.current) {
       map.fitBounds(bounds, { padding: [50, 50] });
+    }
+    if (bounds.isValid()) {
+      prevBoundsRef.current = bounds;
     }
   }, [map, bounds, disabled]);
 
@@ -469,21 +474,15 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
       setIsProfileZoomed(false);
       setIsProfileObstructed(false);
       profileZoomBeforeRef.current = null;
+    }
 
-      if (prevViewRef.current && mapRef.current) {
-        // Restore the original view without animation
-        mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom, { animate: false });
-        prevViewRef.current = null;
-      }
-    } else {
-      if (mapRef.current) {
-        mapRef.current.eachLayer((layer: any) => {
-          if (typeof layer.getPopup === 'function' && layer.getPopup()) {
-            const popup = layer.getPopup();
-            popup.options.autoPan = false;
-          }
-        });
-      }
+    if (mapRef.current) {
+      mapRef.current.eachLayer((layer: any) => {
+        if (typeof layer.getPopup === 'function' && layer.getPopup()) {
+          const popup = layer.getPopup();
+          popup.options.autoPan = !topoProps;
+        }
+      });
     }
   }, [topoProps]);
 
@@ -589,6 +588,25 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
            onClose={() => {
              setTopoProps(null);
              setProfileHoverPoint(null);
+             setIsProfileZoomed(false);
+             setIsProfileObstructed(false);
+             profileZoomBeforeRef.current = null;
+             if (prevViewRef.current && mapRef.current) {
+               mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom);
+               prevViewRef.current = null;
+             }
+             if (mapRef.current) {
+               mapRef.current.eachLayer((layer: any) => {
+                 if (layer instanceof L.Marker && typeof layer.isPopupOpen === 'function' && layer.isPopupOpen()) {
+                   layer.closePopup();
+                   setTimeout(() => {
+                     if (layer.openPopup) {
+                       layer.openPopup();
+                     }
+                   }, 50);
+                 }
+               });
+             }
            }}
            onHoverPoint={setProfileHoverPoint}
            onObstructionChange={setIsProfileObstructed}
@@ -601,6 +619,7 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
                  mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom);
                }
                setIsProfileZoomed(false);
+               profileZoomBeforeRef.current = null;
              } else {
                profileZoomBeforeRef.current = {
                  center: mapRef.current.getCenter(),
@@ -771,6 +790,22 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
                        if (topoProps?.rxCoords[0] === rxCoords[0] && topoProps?.rxCoords[1] === rxCoords[1] && topoProps?.txCoords[0] === tx.lat && topoProps?.txCoords[1] === tx.lon) {
                          setTopoProps(null);
                          setProfileHoverPoint(null);
+                         if (prevViewRef.current && mapRef.current) {
+                           mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom);
+                           prevViewRef.current = null;
+                         }
+                         if (mapRef.current) {
+                           mapRef.current.eachLayer((layer: any) => {
+                             if (layer instanceof L.Marker && typeof layer.isPopupOpen === 'function' && layer.isPopupOpen()) {
+                               layer.closePopup();
+                               setTimeout(() => {
+                                 if (layer.openPopup) {
+                                   layer.openPopup();
+                                 }
+                               }, 50);
+                             }
+                           });
+                         }
                        } else {
                          if (mapRef.current && !prevViewRef.current) {
                            prevViewRef.current = { center: mapRef.current.getCenter(), zoom: mapRef.current.getZoom() };

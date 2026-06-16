@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, CircleMarker, Popup, useMap, useMapEvents, Pol
 import 'leaflet/dist/leaflet.css';
 import { MobileMultiplexStat, MobilePoint, MobileTransmitterStat } from '../types';
 import { useAppContext } from '../contexts/AppContext';
-import { Layers, Navigation, X, Maximize2, Minimize2, LocateFixed, ChevronDown, Check } from 'lucide-react';
+import { Layers, Navigation, X, Maximize2, Minimize2, LocateFixed, ChevronDown, Check, Pin } from 'lucide-react';
 import L from 'leaflet';
 import { ElevationProfile, MAP_TILES } from './CoverageMap';
 import { sortChannels } from '../lib/utils';
@@ -425,7 +425,6 @@ export function MobileCoverageMap({
                 setSelectedTx(e.target.value || null);
                 setActiveLine(null);
                 setSelectedPoint(null);
-                setColorMode('snr');
               }}
             >
               <option value="">{t('allPointsSnr')}</option>
@@ -859,7 +858,7 @@ export function MobileCoverageMap({
               </div>
 
               {/* Transmitters List */}
-              {!selectedTx ? (() => {
+              {(() => {
                 const maxLevel = selectedPoint.transmitters.length > 0 ? Math.max(...selectedPoint.transmitters.map(t => t.level)) : 0;
                 const maxLevelTx = selectedPoint.transmitters.find(t => t.level === maxLevel);
                 return (
@@ -867,26 +866,39 @@ export function MobileCoverageMap({
                   {selectedPoint.transmitters.length === 0 ? (
                      <div className="text-xs text-slate-500 italic py-2 text-center bg-white dark:bg-slate-800/30 rounded-lg">{t('noTxDecoded')}</div>
                   ) : (
-                    [...selectedPoint.transmitters].sort((a,b) => b.level - a.level).map(tx => {
+                    [...selectedPoint.transmitters].sort((a,b) => {
+                      if (selectedTx) {
+                        if (a.tii === selectedTx && b.tii !== selectedTx) return -1;
+                        if (b.tii === selectedTx && a.tii !== selectedTx) return 1;
+                      }
+                      return b.level - a.level;
+                    }).map(tx => {
                       let isConflictTx = false;
                       if (selectedPoint.hasSfnConflict && maxLevelTx && tx.tii !== maxLevelTx.tii) {
                         if (Math.abs(tx.distance - maxLevelTx.distance) >= 74 && tx.level >= maxLevel - 15) {
                           isConflictTx = true;
                         }
                       }
+                      const isPinned = selectedTx && tx.tii === selectedTx;
                       return (
-                      <div key={tx.tii} className="bg-white dark:bg-slate-800/80 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-sm flex flex-col gap-3 transition-colors">
+                      <div key={tx.tii} className={`bg-white dark:bg-slate-800/80 p-3 rounded-xl border shadow-sm flex flex-col gap-3 transition-colors ${isPinned ? 'border-amber-400 dark:border-amber-500/80 ring-1 ring-amber-400/20 dark:ring-amber-500/20' : 'border-slate-200 dark:border-slate-700/60'}`}>
                         <div className="flex justify-between items-start gap-3">
                           <div className="flex flex-col gap-1 flex-1 min-w-0">
                             {tx.location ? (
-                              <TruncatedText 
-                                lines={2}
-                                className="font-bold text-slate-900 dark:text-slate-50 text-base leading-tight break-words" 
-                                text={tx.location} 
-                              />
+                              <div className="flex items-center gap-1.5">
+                                {isPinned && <Pin className="w-4 h-4 text-amber-500 shrink-0 fill-amber-500/20" />}
+                                <TruncatedText 
+                                  lines={2}
+                                  className="font-bold text-slate-900 dark:text-slate-50 text-base leading-tight break-words" 
+                                  text={tx.location} 
+                                />
+                              </div>
                             ) : (
-                              <div className="font-bold text-orange-600 dark:text-orange-500 text-base leading-tight break-words">
-                                {t('unknownSite')}
+                              <div className="flex items-center gap-1.5">
+                                {isPinned && <Pin className="w-4 h-4 text-amber-500 shrink-0 fill-amber-500/20" />}
+                                <div className="font-bold text-orange-600 dark:text-orange-500 text-base leading-tight break-words">
+                                  {t('unknownSite')}
+                                </div>
                               </div>
                             )}
                             <div className="flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-400 mt-1">
@@ -987,130 +999,7 @@ export function MobileCoverageMap({
                    })
                   )}
                  </div>
-               ); })() : (() => {
-                 let isConflictTx = false;
-                 if (selectedPoint.txData && selectedPoint.hasSfnConflict) {
-                   const maxLevel = selectedPoint.transmitters.length > 0 ? Math.max(...selectedPoint.transmitters.map(t => t.level)) : 0;
-                   const maxLevelTx = selectedPoint.transmitters.find(t => t.level === maxLevel);
-                   if (maxLevelTx && selectedPoint.txData.tii !== maxLevelTx.tii) {
-                     if (Math.abs(selectedPoint.txData.distance - maxLevelTx.distance) >= 74 && selectedPoint.txData.level >= maxLevel - 15) {
-                       isConflictTx = true;
-                     }
-                   }
-                 }
-                 return (
-                 <div className="flex flex-col gap-3">
-                  {selectedPoint.txData && (
-                    <div className="bg-white dark:bg-slate-800/80 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-sm flex flex-col gap-3 transition-colors">
-                      <div className="flex justify-between items-start gap-3">
-                        <div className="flex flex-col gap-1 flex-1 min-w-0">
-                          {selectedPoint.txData.location ? (
-                            <TruncatedText 
-                              lines={2}
-                              className="font-bold text-slate-900 dark:text-slate-50 text-base leading-tight break-words" 
-                              text={selectedPoint.txData.location} 
-                            />
-                          ) : (
-                            <div className="font-bold text-orange-600 dark:text-orange-500 text-base leading-tight break-words">
-                              {t('unknownSite')}
-                            </div>
-                          )}
-                          <div className="flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-400 mt-1">
-                            <div><span className="font-medium text-slate-500">{t('distanceField')}</span> <span className="font-medium text-slate-800 dark:text-slate-200">{selectedPoint.txData.distance.toFixed(1)} km</span></div>
-                            {selectedPoint.txData.power > 0 && (
-                              <div><span className="font-medium text-slate-500">{t('erpPowerField')}</span> <span className="font-medium text-slate-800 dark:text-slate-200">{selectedPoint.txData.power.toFixed(1)} kW</span></div>
-                            )}
-                            <div><span className="font-medium text-slate-500">{t('tiiCodeField')}</span> <span className="font-medium text-slate-800 dark:text-slate-200">{selectedPoint.txData.tii}</span></div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {isConflictTx && (
-                            <span 
-                              className="text-lg leading-none cursor-help"
-                              title={t('sfnConflictTooltip')}
-                            >
-                              ⚠️
-                            </span>
-                          )}
-                          <span className="font-bold text-sm px-2.5 py-1 bg-slate-50 dark:bg-slate-900/50 rounded-lg whitespace-nowrap border border-slate-100 dark:border-slate-700/50" style={{ color: getLevelColor(selectedPoint.txData.level) }}>
-                            {selectedPoint.txData.level.toFixed(1)} dB
-                          </span>
-                        </div>
-                      </div>
-                      
-                      {selectedPoint.txData.lat && selectedPoint.txData.lon && (
-                        <div className="flex gap-2 border-t border-slate-200 dark:border-slate-700/50 pt-3">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveLine(prev => {
-                                if (prev?.pointLat === selectedPoint.lat && prev?.pointLon === selectedPoint.lon && prev?.txLat === selectedPoint.txData!.lat) {
-                                  if (mapRef.current && prevViewRef.current) {
-                                    mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom);
-                                    prevViewRef.current = null;
-                                  }
-                                  return null;
-                                } else {
-                                  if (mapRef.current && !prevViewRef.current) {
-                                    prevViewRef.current = { center: mapRef.current.getCenter(), zoom: mapRef.current.getZoom() };
-                                  }
-                                  if (mapRef.current) {
-                                    mapRef.current.fitBounds([
-                                      [selectedPoint.lat, selectedPoint.lon],
-                                      [selectedPoint.txData!.lat!, selectedPoint.txData!.lon!]
-                                    ], { padding: [50, 50] });
-                                  }
-                                  return {
-                                    pointLat: selectedPoint.lat,
-                                    pointLon: selectedPoint.lon,
-                                    txLat: selectedPoint.txData!.lat!,
-                                    txLon: selectedPoint.txData!.lon!
-                                  };
-                                }
-                              });
-                            }}
-                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${activeLine?.pointLat === selectedPoint.lat ? 'bg-blue-200 dark:bg-blue-800/80 text-blue-800 dark:text-blue-200 hover:bg-blue-300 dark:hover:bg-blue-700' : 'bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-800/60 text-blue-700 dark:text-blue-300'}`}
-                          >
-                            <Navigation className="w-3.5 h-3.5" />
-                            {t('line')}
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (topoProps?.rxCoords[0] === selectedPoint.lat && topoProps?.rxCoords[1] === selectedPoint.lon && topoProps?.txCoords[0] === selectedPoint.txData!.lat) {
-                                setTopoProps(null);
-                                setProfileHoverPoint(null);
-                                if (prevViewRef.current && mapRef.current) {
-                                  mapRef.current.setView(prevViewRef.current.center, prevViewRef.current.zoom);
-                                  prevViewRef.current = null;
-                                }
-                              } else {
-                                if (mapRef.current && !prevViewRef.current) {
-                                  prevViewRef.current = { center: mapRef.current.getCenter(), zoom: mapRef.current.getZoom() };
-                                }
-                                if (mapRef.current) {
-                                  mapRef.current.fitBounds([
-                                    [selectedPoint.lat, selectedPoint.lon],
-                                    [selectedPoint.txData!.lat!, selectedPoint.txData!.lon!]
-                                  ], { padding: [50, 50] });
-                                }
-                                setTopoProps({
-                                  rxCoords: [selectedPoint.lat, selectedPoint.lon],
-                                  txCoords: [selectedPoint.txData!.lat!, selectedPoint.txData!.lon!],
-                                  location: selectedPoint.txData!.location || t('unknownSite')
-                                });
-                              }
-                            }}
-                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${topoProps?.rxCoords[0] === selectedPoint.lat && topoProps?.txCoords[0] === selectedPoint.txData!.lat ? 'bg-amber-200 dark:bg-amber-800/80 text-amber-800 dark:text-amber-200 hover:bg-amber-300 dark:hover:bg-amber-700' : 'bg-amber-50 dark:bg-amber-900/40 hover:bg-amber-100 dark:hover:bg-amber-800/60 text-amber-700 dark:text-amber-300'}`}
-                          >
-                            {t('topoProfile')}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ); })()}
+               ); })()}
 
               {selectedPoint.timeMs && (
                 <div className="flex justify-between items-center pt-3 mt-1 border-t border-slate-200 dark:border-slate-700/50">

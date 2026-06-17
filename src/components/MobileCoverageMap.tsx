@@ -127,6 +127,8 @@ export function MobileCoverageMap({
     const saved = localStorage.getItem('map_colorMode');
     return saved === 'level' || saved === 'snr' ? saved : 'snr';
   });
+  const [hoveredTx, setHoveredTx] = useState<string | null>(null);
+  const [clickedTx, setClickedTx] = useState<string | null>(null);
   const [activeLine, setActiveLine] = useState<{ pointLat: number, pointLon: number, txLat: number, txLon: number } | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<(MobilePoint & { renderColor: string, txData: any, hasSfnConflict: boolean }) | null>(null);
   const [isMuxDropdownOpen, setIsMuxDropdownOpen] = useState(false);
@@ -425,6 +427,7 @@ export function MobileCoverageMap({
                 setSelectedTx(e.target.value || null);
                 setActiveLine(null);
                 setSelectedPoint(null);
+                setClickedTx(null);
               }}
             >
               <option value="">{t('allPointsSnr')}</option>
@@ -673,6 +676,12 @@ export function MobileCoverageMap({
                     key={tx.tii} 
                     position={[tx.lat, tx.lon]}
                     icon={txIcon}
+                    eventHandlers={{
+                      mouseover: () => setHoveredTx(tx.tii),
+                      mouseout: () => setHoveredTx(null),
+                      popupopen: () => setClickedTx(tx.tii),
+                      popupclose: () => setClickedTx(null)
+                    }}
                   >
                     <Popup className="custom-popup dark-popup">
                       <div className="font-bold border-b border-slate-200 dark:border-slate-700 pb-2 mb-2 text-slate-800 dark:text-slate-100">
@@ -739,7 +748,13 @@ export function MobileCoverageMap({
               <HeatmapLayer points={renderPoints} colorMode={colorMode} />
             )}
 
-            {showPolygons && coveragePolygons.map((poly, idx) => (
+            {showPolygons && [...coveragePolygons].sort((a, b) => {
+               const activeA = hoveredTx === a.tii || clickedTx === a.tii;
+               const activeB = hoveredTx === b.tii || clickedTx === b.tii;
+               return (activeA ? 1 : 0) - (activeB ? 1 : 0);
+            }).map((poly, idx) => {
+               const isActive = hoveredTx === poly.tii || clickedTx === poly.tii;
+               return (
                <Polygon
                  key={`poly-${poly.tii}-${idx}`}
                  positions={poly.coords}
@@ -747,11 +762,11 @@ export function MobileCoverageMap({
                    fillColor: poly.fillColor, 
                    fillOpacity: 0.2, 
                    color: poly.fillColor, 
-                   weight: 1,
-                   opacity: 0.6
+                   weight: isActive ? 3 : 1,
+                   opacity: isActive ? 1 : 0.6
                  }}
                />
-            ))}
+            )})}
 
             {showPoints && (
               <React.Fragment>
@@ -802,7 +817,7 @@ export function MobileCoverageMap({
                 </Pane>
               </React.Fragment>
             )}
-          <MapEventHandler onClick={() => { setSelectedPoint(null); setActiveLine(null); setMapPickerOpen(false); setIsMuxDropdownOpen(false); }} onZoom={(z) => setMapZoom(z)} />
+          <MapEventHandler onClick={() => { setSelectedPoint(null); setActiveLine(null); setMapPickerOpen(false); setIsMuxDropdownOpen(false); setClickedTx(null); }} onZoom={(z) => setMapZoom(z)} />
         </MapContainer>
         </div>
 

@@ -13,6 +13,9 @@ Potential SFN conflict zones (with exceeded guard interval, which can affect dec
 For optimal performance, it is recommended to import logs created with V4 or later. Logs from earlier versions may work fully or partially, but this is not guaranteed.
 <br>
 <br>
+💡 Documentation about the tool is available by [clicking here.](https://github.com/LucasGallone/AbracaDABra-TII-Logs-Analyzer/wiki) It explains how the interface and functions work.
+<br>
+<br>
 AbracaDABra is a DAB and DAB+ Software Defined Radio (SDR) application, made by [@KejPi](https://github.com/KejPi/).
 <br>
 To learn more about it, [click here.](https://github.com/KejPi/AbracaDABra)

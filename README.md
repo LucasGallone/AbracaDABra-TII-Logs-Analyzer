@@ -1,4 +1,4 @@
-# AbracaDABra-TII-Logs-Analyzer
+# TII Logs Analyzer for AbracaDABra
 This web interface allows you to analyze TII logs generated with the "AbracaDABra" software, generating clear summaries of static DAB bandscans, including details related to detections, transmitter locations, TII codes, etc.
 <br>
 <br>
@@ -25,10 +25,21 @@ Otherwise, copy and paste the following URL: `https://lucasgallone.github.io/Abr
 
 - - -
 
+## Static Scan mode
+
 <img width="1918" alt="tii-analyzer1" src="https://github.com/user-attachments/assets/b8e2f8ef-f1de-4877-b32a-ff250ee38f01" />
 <img width="1918" alt="tii-analyzer2" src="https://github.com/user-attachments/assets/7f530a02-6ab7-4932-9793-83d1164f2db1" />
 <img width="1918" alt="tii-analyzer3" src="https://github.com/user-attachments/assets/f4ea9dad-255f-4f9e-83c1-0b8990275a98" />
 <img width="1918" alt="tii-analyzer4" src="https://github.com/user-attachments/assets/1c848f42-5ff6-4945-a67d-370380f21454" />
+
+- - -
+
+## Mobile Scan mode
+
+<img width="1918" alt="tii-analyzer-mobile-1" src="https://github.com/user-attachments/assets/1fa93957-ec46-4e53-bd0e-eb7aee6b3ada" />
+<img width="1918" alt="tii-analyzer-mobile-2" src="https://github.com/user-attachments/assets/8a6cabd5-4ffd-437f-a114-b67512b1f8b5" />
+<img width="1918" alt="tii-analyzer-mobile-3" src="https://github.com/user-attachments/assets/7db122f2-0166-43ff-b38d-bc85b7549f62" />
+<img width="1918" alt="tii-analyzer-mobile-4" src="https://github.com/user-attachments/assets/93f3dd5f-145b-442e-a592-3e30b53df20b" />
 
 - - -
 

@@ -1,8 +1,16 @@
 # AbracaDABra-TII-Logs-Analyzer
-A web interface that allows you to analyze AbracaDABra's "TII logs" (CSV format) to create a clear summary of a DAB bandscan, including details about detections, TII codes, transmitter locations, etc.
+This web interface allows you to analyze TII logs generated with the "AbracaDABra" software, generating clear summaries of static DAB bandscans, including details related to detections, transmitter locations, TII codes, etc.
 <br>
 <br>
-Works best with logs generated from V4 of the software onwards. Receptions can be visualized on a map if the logs contain GPS coordinates (Tested with log files made on V3 too, but the transmitter sites are not shown on the map).
+It is also possible to analyze mobile reception measurements (made from a car, for example) to verify reception of one or more multiplexes along a specific route. 
+<br>
+<br>
+Reception points can be viewed on a map, and it is possible to filter the view to a specific transmitter (if multiple transmitters were received for a same multiplex). 
+<br>
+Potential SFN conflict zones (with exceeded guard interval, which can affect decoding quality) can also be recognized.
+<br>
+<br>
+For optimal performance, it is recommended to import logs created with V4 or later. Logs from earlier versions may work fully or partially, but this is not guaranteed.
 <br>
 <br>
 AbracaDABra is a DAB and DAB+ Software Defined Radio (SDR) application, made by [@KejPi](https://github.com/KejPi/).
@@ -19,8 +27,8 @@ Otherwise, copy and paste the following URL: `https://lucasgallone.github.io/Abr
 
 <img width="1918" alt="tii-analyzer1" src="https://github.com/user-attachments/assets/b8e2f8ef-f1de-4877-b32a-ff250ee38f01" />
 <img width="1918" alt="tii-analyzer2" src="https://github.com/user-attachments/assets/7f530a02-6ab7-4932-9793-83d1164f2db1" />
-<img width="1918" alt="tii-analyzer3" src="https://github.com/user-attachments/assets/b1d697d0-cd65-454e-940a-b69ed579ee86" />
-<img width="1918" alt="tii-analyzer4" src="https://github.com/user-attachments/assets/0a737de3-e176-43ff-bfce-22d46c0d66c6" />
+<img width="1918" alt="tii-analyzer3" src="https://github.com/user-attachments/assets/f4ea9dad-255f-4f9e-83c1-0b8990275a98" />
+<img width="1918" alt="tii-analyzer4" src="https://github.com/user-attachments/assets/1c848f42-5ff6-4945-a67d-370380f21454" />
 
 - - -
 

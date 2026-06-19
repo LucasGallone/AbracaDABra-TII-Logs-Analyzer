@@ -6,7 +6,7 @@ import { ScanTypeModal } from './components/ScanTypeModal';
 import { parseDABData, parseMobileDABData, enrichWithAltitudes } from './lib/parser';
 import { RawDABRow, ScanStats, MobileScanStats } from './types';
 import { useAppContext } from './contexts/AppContext';
-import { Moon, Sun, Languages } from 'lucide-react';
+import { Moon, Sun, Languages, Info } from 'lucide-react';
 
 export default function App() {
   const [stats, setStats] = useState<ScanStats | null>(null);
@@ -87,6 +87,16 @@ export default function App() {
              >
                {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
              </button>
+             
+             <a
+               href="https://github.com/LucasGallone/AbracaDABra-TII-Logs-Analyzer/wiki"
+               target="_blank"
+               rel="noopener noreferrer"
+               className="p-2 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors"
+               title={t('githubDocTooltip')}
+             >
+               <Info className="w-5 h-5" />
+             </a>
            </div>
         </div>
       </header>

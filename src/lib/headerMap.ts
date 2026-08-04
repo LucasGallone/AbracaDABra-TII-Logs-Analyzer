@@ -8,7 +8,8 @@ export const transformColumnHeader = (header: string, index?: number): string =>
     lowerH.startsWith('čas') || 
     lowerH.startsWith('zeit') || 
     lowerH.startsWith('data\\ora') || 
-    lowerH.startsWith('czas')
+    lowerH.startsWith('czas') ||
+    lowerH.startsWith('heure')
   ) {
     const tzMatch = header.match(/\((.+?)\)/);
     if (tzMatch) {
@@ -53,6 +54,7 @@ export const transformColumnHeader = (header: string, index?: number): string =>
     'sottostazione': 'Sub',
     'pod': 'Sub',
     'sous': 'Sub',
+    'secondaire': 'Sub',
 
     'úroveň [db]': 'Level [dB]',
     'feldstärke [db]': 'Level [dB]',
@@ -66,6 +68,7 @@ export const transformColumnHeader = (header: string, index?: number): string =>
     'postazione': 'Location',
     'lokalizacja': 'Location',
     'emplacement': 'Location',
+    'localisation': 'Location',
     'location': 'Location',
 
     'výkon [kw]': 'Power [kW]',
@@ -98,6 +101,23 @@ export const transformColumnHeader = (header: string, index?: number): string =>
     'długość geograficzna (tx)': 'Longitude (TX)',
     'longitude (tx)': 'Longitude (TX)',
 
+    'altitude (tx)': 'Altitude (TX)',
+    'höhe (tx)': 'Altitude (TX)',
+    'seehöhe (tx)': 'Altitude (TX)',
+    'altezza (tx)': 'Altitude (TX)',
+    'altitudine (tx)': 'Altitude (TX)',
+    'wysokość (tx)': 'Altitude (TX)',
+    'výška (tx)': 'Altitude (TX)',
+    'nadm. výška (tx)': 'Altitude (TX)',
+
+    'hauteur d\'antenne (tx)': 'Antenna Height (TX)',
+    'antenna height (tx)': 'Antenna Height (TX)',
+    'antennenhöhe (tx)': 'Antenna Height (TX)',
+    'altezza antenna (tx)': 'Antenna Height (TX)',
+    'altezza dell\'antenna (tx)': 'Antenna Height (TX)',
+    'wysokość anteny (tx)': 'Antenna Height (TX)',
+    'výška antény (tx)': 'Antenna Height (TX)',
+
     'zem. šířka (rx)': 'Latitude (RX)',
     'breitenkreis (rx)': 'Latitude (RX)',
     'latitudine (rx)': 'Latitude (RX)',
@@ -108,7 +128,16 @@ export const transformColumnHeader = (header: string, index?: number): string =>
     'längenkreis (rx)': 'Longitude (RX)',
     'longitudine (rx)': 'Longitude (RX)',
     'długość geograficzna (rx)': 'Longitude (RX)',
-    'longitude (rx)': 'Longitude (RX)'
+    'longitude (rx)': 'Longitude (RX)',
+
+    'altitude (rx)': 'Altitude (RX)',
+    'höhe (rx)': 'Altitude (RX)',
+    'seehöhe (rx)': 'Altitude (RX)',
+    'altezza (rx)': 'Altitude (RX)',
+    'altitudine (rx)': 'Altitude (RX)',
+    'wysokość (rx)': 'Altitude (RX)',
+    'výška (rx)': 'Altitude (RX)',
+    'nadm. výška (rx)': 'Altitude (RX)'
   };
 
   if (headerMap[lowerH]) {

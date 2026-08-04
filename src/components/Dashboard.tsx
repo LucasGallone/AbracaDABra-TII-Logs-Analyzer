@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { format } from 'date-fns';
 import { fr, enUS } from 'date-fns/locale';
-import { Activity, MapPin, Radio, Signal, AlertCircle, FileText, Download, Map as MapIcon, List, ArrowDownUp, Image as ImageIcon, Mountain } from 'lucide-react';
+import { Activity, MapPin, Radio, Signal, AlertCircle, FileText, Download, Map as MapIcon, List, ArrowDownUp, Image as ImageIcon, Mountain, Antenna } from 'lucide-react';
 import { ScanStats, MultiplexStat, RawDABRow } from '../types';
 import { useAppContext } from '../contexts/AppContext';
 import { generatePDF, generateTXT } from '../lib/export';
@@ -122,7 +122,10 @@ const MultiplexCard: React.FC<{ mux: MultiplexStat, compact?: boolean }> = ({ mu
                              <span className="text-slate-500 dark:text-slate-400 whitespace-nowrap">{tx.power.toFixed(1)} kW</span>
                            )}
                            {tx.altitude !== undefined && tx.altitude !== -1 && (
-                             <span className="text-emerald-700 dark:text-emerald-400 whitespace-nowrap">{language === 'fr' ? 'Altitude :' : 'Altitude:'} {Math.round(tx.altitude)}m</span>
+                             <span className="text-emerald-700 dark:text-emerald-400 whitespace-nowrap" title={t('txAltitude')}>{Math.round(tx.altitude)}m</span>
+                           )}
+                           {tx.antennaHeight !== undefined && tx.antennaHeight !== -1 && (
+                             <span className="text-purple-700 dark:text-purple-400 whitespace-nowrap" title={t('txAntennaHeight')}>{Math.round(tx.antennaHeight)}m</span>
                            )}
                         </div>
                         <span className="font-mono text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap w-12 text-right">{tx.level.toFixed(1)}</span>
@@ -220,7 +223,13 @@ const MultiplexCard: React.FC<{ mux: MultiplexStat, compact?: boolean }> = ({ mu
                         {tx.altitude !== undefined && tx.altitude !== -1 && (
                           <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
                             <Mountain className="w-3.5 h-3.5" />
-                            <span>{language === 'fr' ? 'Altitude :' : 'Altitude:'} {Math.round(tx.altitude)}m</span>
+                            <span>{t('txAltitude')}{language === 'fr' ? ' : ' : ': '}{Math.round(tx.altitude)}m</span>
+                          </div>
+                        )}
+                        {tx.antennaHeight !== undefined && tx.antennaHeight !== -1 && (
+                          <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
+                            <Antenna className="w-3.5 h-3.5" />
+                            <span>{t('txAntennaHeight')}{language === 'fr' ? ' : ' : ': '}{Math.round(tx.antennaHeight)}m</span>
                           </div>
                         )}
                       </div>
@@ -437,6 +446,9 @@ export function Dashboard({ stats, onReset, onUpdateStats, fileCount = 1, rawDat
                      <span className="font-medium text-left truncate">{locationName || `${stats.rxLat.toFixed(5)}, ${stats.rxLon.toFixed(5)}`}</span>
                      {locationName && (
                        <span className="text-xs text-slate-500 font-normal">({stats.rxLat.toFixed(5)}, {stats.rxLon.toFixed(5)})</span>
+                     )}
+                     {stats.rxAltitude !== undefined && stats.rxAltitude !== -1 && (
+                       <span className="text-xs text-slate-500 font-normal mt-0.5">{t('rxAltitude')}{language === 'fr' ? ' : ' : ': '}{Math.round(stats.rxAltitude)}m</span>
                      )}
                    </span>
                  </span>

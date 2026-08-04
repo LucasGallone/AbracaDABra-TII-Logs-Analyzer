@@ -159,7 +159,7 @@ function ProfileTooltip({ active, payload, label, language, onHoverPoint }: any)
   return null;
 }
 
-export function ElevationProfile({ rxCoords, txCoords, location, onClose, onHoverPoint, onClickPoint, isProfileZoomed, onObstructionChange }: { rxCoords: [number, number]; txCoords: [number, number]; location: string; onClose: () => void; onHoverPoint?: (coords: [number, number] | null) => void; onClickPoint?: (coords: [number, number]) => void; isProfileZoomed?: boolean; onObstructionChange?: (obstructed: boolean) => void; }) {
+export function ElevationProfile({ rxCoords, txCoords, location, onClose, onHoverPoint, onClickPoint, isProfileZoomed, onObstructionChange, txAntennaHeight }: { rxCoords: [number, number]; txCoords: [number, number]; location: string; onClose: () => void; onHoverPoint?: (coords: [number, number] | null) => void; onClickPoint?: (coords: [number, number]) => void; isProfileZoomed?: boolean; onObstructionChange?: (obstructed: boolean) => void; txAntennaHeight?: number; }) {
   const [rawData, setRawData] = useState<number[] | null>(null);
   const hoveredCoordsRef = useRef<[number, number] | null>(null);
   
@@ -167,7 +167,7 @@ export function ElevationProfile({ rxCoords, txCoords, location, onClose, onHove
     return localStorage.getItem('elevation_rx_height') || '3';
   });
   const [txHeight, setTxHeight] = useState(() => {
-    return localStorage.getItem('elevation_tx_height') || '30';
+    return txAntennaHeight !== undefined && txAntennaHeight !== -1 ? String(Math.round(txAntennaHeight)) : (localStorage.getItem('elevation_tx_height') || '30');
   });
 
   const handleRxHeightChange = (val: string) => {
@@ -455,7 +455,7 @@ export const MAP_TILES = [
 
 export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProps) {
   const { t, language } = useAppContext();
-  const [topoProps, setTopoProps] = useState<{ rxCoords: [number, number], txCoords: [number, number], location: string } | null>(null);
+  const [topoProps, setTopoProps] = useState<{ rxCoords: [number, number], txCoords: [number, number], location: string, txAntennaHeight?: number } | null>(null);
   const [profileHoverPoint, setProfileHoverPoint] = useState<[number, number] | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [mapPickerOpen, setMapPickerOpen] = useState(false);
@@ -520,7 +520,7 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
       rxC = [Number(stats.rxLat), Number(stats.rxLon)];
     }
 
-    const txMap = new Map<string, { lat: number; lon: number; location: string; altitude?: number; distance: number; azimuth?: number; muxData: { channel: string; label: string; tii: string; powerStr: string; }[] }>();
+    const txMap = new Map<string, { lat: number; lon: number; location: string; altitude?: number; antennaHeight?: number; distance: number; azimuth?: number; muxData: { channel: string; label: string; tii: string; powerStr: string; }[] }>();
     const bnd = new L.LatLngBounds([]);
 
     if (rxC) {
@@ -534,7 +534,7 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
           const tLon = Number(tx.lon);
           const key = `${tLat.toFixed(5)}_${tLon.toFixed(5)}`;
           if (!txMap.has(key)) {
-            txMap.set(key, { lat: tLat, lon: tLon, location: tx.location, altitude: tx.altitude, distance: tx.distance || 0, azimuth: tx.azimuth, muxData: [] });
+            txMap.set(key, { lat: tLat, lon: tLon, location: tx.location, altitude: tx.altitude, antennaHeight: tx.antennaHeight, distance: tx.distance || 0, azimuth: tx.azimuth, muxData: [] });
           }
           const entry = txMap.get(key)!;
           // Add multiplex label if not already in list
@@ -581,9 +581,11 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
     <div className="h-[500px] rounded-xl overflow-hidden shadow-sm border border-slate-200 dark:border-slate-700 relative z-0">
       {topoProps && (
          <ElevationProfile 
+           key={`${topoProps.txCoords[0]}-${topoProps.txCoords[1]}`} 
            rxCoords={topoProps.rxCoords} 
            txCoords={topoProps.txCoords} 
-           location={topoProps.location} 
+           location={topoProps.location}
+           txAntennaHeight={topoProps.txAntennaHeight} 
            isProfileZoomed={isProfileZoomed} 
            onClose={() => {
              setTopoProps(null);
@@ -769,18 +771,25 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
                       </strong>
                     )}
                     <div className="flex flex-col gap-0.5 mt-1.5">
-                      <span className="text-[11px] text-slate-500 font-medium">
-                        {language === 'fr' 
-                          ? `Distance : ${tx.distance > 0 ? tx.distance.toFixed(1) + ' km' : 'N/A'}` 
-                          : `Distance: ${tx.distance > 0 ? tx.distance.toFixed(1) + ' km' : 'N/A'}`}
-                      </span>
-                      {(tx.altitude !== undefined && tx.altitude !== -1) || tx.azimuth !== undefined ? (
-                        <span className="text-[11px] text-slate-500 font-medium">
-                          {tx.altitude !== undefined && tx.altitude !== -1 ? (language === 'fr' ? `Altitude : ${Math.round(tx.altitude)}m` : `Altitude: ${Math.round(tx.altitude)}m`) : ''}
-                          {tx.altitude !== undefined && tx.altitude !== -1 && tx.azimuth !== undefined ? ' - ' : ''}
-                          {tx.azimuth !== undefined ? (language === 'fr' ? `Azimut : ${Math.round(tx.azimuth)}°` : `Azimuth: ${Math.round(tx.azimuth)}°`) : ''}
+                      {tx.distance > 0 && (
+                        <span className="text-[11px] text-slate-500 font-medium block">
+                          {language === 'fr' 
+                            ? `Distance : ${tx.distance.toFixed(1)} km` 
+                            : `Distance: ${tx.distance.toFixed(1)} km`}
                         </span>
-                      ) : null}
+                      )}
+                      {((tx.altitude !== undefined && tx.altitude !== -1) || (tx.antennaHeight !== undefined && tx.antennaHeight !== -1)) && (
+                        <span className="text-[11px] text-slate-500 font-medium block">
+                          {tx.altitude !== undefined && tx.altitude !== -1 ? `${t('txAltitude')}${language === 'fr' ? ' : ' : ': '}${Math.round(tx.altitude)}m` : ''}
+                          {tx.altitude !== undefined && tx.altitude !== -1 && tx.antennaHeight !== undefined && tx.antennaHeight !== -1 ? ' - ' : ''}
+                          {tx.antennaHeight !== undefined && tx.antennaHeight !== -1 ? `${t('txAntennaHeight')}${language === 'fr' ? ' : ' : ': '}${Math.round(tx.antennaHeight)}m` : ''}
+                        </span>
+                      )}
+                      {tx.azimuth !== undefined && (
+                        <span className="text-[11px] text-slate-500 font-medium block">
+                          {language === 'fr' ? `Azimut : ${Math.round(tx.azimuth)}°` : `Azimuth: ${Math.round(tx.azimuth)}°`}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -819,7 +828,8 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
                          setTopoProps({
                            rxCoords: rxCoords,
                            txCoords: [tx.lat, tx.lon],
-                           location: tx.location || t('unknownSite')
+                           location: tx.location || t('unknownSite'),
+                           txAntennaHeight: tx.antennaHeight
                          });
                        }
                      }} 

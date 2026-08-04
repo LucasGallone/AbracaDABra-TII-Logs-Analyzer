@@ -166,7 +166,7 @@ export function MobileCoverageMap({
     const saved = localStorage.getItem('map_snrFilterDirection');
     return saved === '>=' || saved === '<=' ? saved : '>=';
   });
-  const [topoProps, setTopoProps] = useState<{ rxCoords: [number, number], txCoords: [number, number], location: string } | null>(null);
+  const [topoProps, setTopoProps] = useState<{ rxCoords: [number, number], txCoords: [number, number], location: string, txAntennaHeight?: number } | null>(null);
   const [profileHoverPoint, setProfileHoverPoint] = useState<[number, number] | null>(null);
   const prevViewRef = useRef<{ center: L.LatLng, zoom: number } | null>(null);
   const profileZoomBeforeRef = useRef<{ center: L.LatLng, zoom: number } | null>(null);
@@ -473,9 +473,11 @@ export function MobileCoverageMap({
         <div className="flex-1 relative w-full h-full min-h-[400px]" ref={mapContainerRef}>
           {topoProps && (
              <ElevationProfile 
+               key={`${topoProps.txCoords[0]}-${topoProps.txCoords[1]}`} 
                rxCoords={topoProps.rxCoords} 
                txCoords={topoProps.txCoords} 
-               location={topoProps.location} 
+               location={topoProps.location}
+               txAntennaHeight={topoProps.txAntennaHeight} 
                isProfileZoomed={isProfileZoomed} 
                onClose={() => {
                  setTopoProps(null);
@@ -697,6 +699,12 @@ export function MobileCoverageMap({
                         )}
                         {tx.power > 0 && (
                           <div><span className="font-medium text-slate-500">{t('erpPowerField')}</span> <span className="font-medium text-slate-800 dark:text-slate-200">{tx.power.toFixed(1)} kW</span></div>
+                        )}
+                        {tx.altitude !== undefined && tx.altitude !== -1 && (
+                          <div><span className="font-medium text-slate-500">{t('txAltitude')}{language === 'fr' ? ' :' : ':'}</span> <span className="font-medium text-slate-800 dark:text-slate-200">{Math.round(tx.altitude)}m</span></div>
+                        )}
+                        {tx.antennaHeight !== undefined && tx.antennaHeight !== -1 && (
+                          <div><span className="font-medium text-slate-500">{t('txAntennaHeight')}{language === 'fr' ? ' :' : ':'}</span> <span className="font-medium text-slate-800 dark:text-slate-200">{Math.round(tx.antennaHeight)}m</span></div>
                         )}
                         <div><span className="font-medium text-slate-500">{t('tiiCodeField')}</span> <span className="font-medium text-slate-800 dark:text-slate-200">{tx.tii}</span></div>
                       </div>
@@ -923,6 +931,12 @@ export function MobileCoverageMap({
                               {tx.power > 0 && (
                                 <div><span className="font-medium text-slate-500">{t('erpPowerField')}</span> <span className="font-medium text-slate-800 dark:text-slate-200">{tx.power.toFixed(1)} kW</span></div>
                               )}
+                              {tx.altitude !== undefined && tx.altitude !== -1 && (
+                                <div><span className="font-medium text-slate-500">{t('txAltitude')}{language === 'fr' ? ' :' : ':'}</span> <span className="font-medium text-slate-800 dark:text-slate-200">{Math.round(tx.altitude)}m</span></div>
+                              )}
+                              {tx.antennaHeight !== undefined && tx.antennaHeight !== -1 && (
+                                <div><span className="font-medium text-slate-500">{t('txAntennaHeight')}{language === 'fr' ? ' :' : ':'}</span> <span className="font-medium text-slate-800 dark:text-slate-200">{Math.round(tx.antennaHeight)}m</span></div>
+                              )}
                               <div><span className="font-medium text-slate-500">{t('tiiCodeField')}</span> <span className="font-medium text-slate-800 dark:text-slate-200">{tx.tii}</span></div>
                             </div>
                           </div>
@@ -999,7 +1013,8 @@ export function MobileCoverageMap({
                                   setTopoProps({
                                     rxCoords: [selectedPoint.lat, selectedPoint.lon],
                                     txCoords: [tx.lat!, tx.lon!],
-                                    location: tx.location || t('unknownSite')
+                                    location: tx.location || t('unknownSite'),
+                                    txAntennaHeight: tx.antennaHeight
                                   });
                                 }
                               }}

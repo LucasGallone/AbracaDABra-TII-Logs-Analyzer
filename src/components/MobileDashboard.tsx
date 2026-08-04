@@ -237,7 +237,12 @@ export function MobileDashboard({
                             )}
                             {tx.altitude !== undefined && tx.altitude !== -1 && (
                               <div>
-                                <span>{language === 'fr' ? 'Altitude du site :' : 'Site Altitude:'}</span> <span>{Math.round(tx.altitude)}m</span>
+                                <span>{t('txAltitude')}{language === 'fr' ? ' :' : ':'}</span> <span>{Math.round(tx.altitude)}m</span>
+                              </div>
+                            )}
+                            {tx.antennaHeight !== undefined && tx.antennaHeight !== -1 && (
+                              <div>
+                                <span>{t('txAntennaHeight')}{language === 'fr' ? ' :' : ':'}</span> <span>{Math.round(tx.antennaHeight)}m</span>
                               </div>
                             )}
                           </div>

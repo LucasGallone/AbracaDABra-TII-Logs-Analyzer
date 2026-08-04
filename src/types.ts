@@ -14,8 +14,11 @@ export interface RawDABRow {
   'Azimuth [deg]': string;
   'Latitude (TX)': string;
   'Longitude (TX)': string;
+  'Altitude (TX)': string;
+  'Antenna Height (TX)': string;
   'Latitude (RX)': string;
   'Longitude (RX)': string;
+  'Altitude (RX)': string;
 }
 
 export interface Transmitter {
@@ -31,6 +34,7 @@ export interface Transmitter {
   lat?: number;
   lon?: number;
   altitude?: number;
+  antennaHeight?: number;
 }
 
 export interface MultiplexStat {
@@ -48,6 +52,7 @@ export interface ScanStats {
   timeZoneStr?: string;
   rxLat?: number;
   rxLon?: number;
+  rxAltitude?: number;
   rxLocationName?: string;
   channelCount: number;
   multiplexCount: number;
@@ -66,11 +71,14 @@ export interface MobilePointTransmitter {
   distance: number;
   lat?: number;
   lon?: number;
+  altitude?: number;
+  antennaHeight?: number;
 }
 
 export interface MobilePoint {
   lat: number;
   lon: number;
+  altitude?: number;
   snr: number;
   timeMs?: number;
   transmitters: MobilePointTransmitter[]; // All transmitters received at this specific point
@@ -83,6 +91,7 @@ export interface MobileTransmitterStat {
   lat?: number;
   lon?: number;
   altitude?: number;
+  antennaHeight?: number;
   pointCount: number;
   minLevel: number;
   maxLevel: number;

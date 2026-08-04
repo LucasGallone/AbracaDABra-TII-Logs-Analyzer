@@ -40,14 +40,16 @@ export function parseMobileDABData(data: RawDABRow[]): MobileScanStats | null {
   const muxDetailsMap = new Map<string, { channel: string, label: string }>();
 
   validData.forEach(row => {
-    const label = row.Label.trim();
-    const channel = row.Channel.trim();
+    const label = row.Label?.trim() || '';
+    const channel = row.Channel?.trim() || '';
     if (!label || !channel) return;
 
     const latStrRX = row['Latitude (RX)']?.replace(',', '.') || '';
     const lonStrRX = row['Longitude (RX)']?.replace(',', '.') || '';
+    const altStrRX = row['Altitude (RX)']?.replace(',', '.') || '';
     const latRX = parseFloat(latStrRX);
     const lonRX = parseFloat(lonStrRX);
+    const altRX = parseFloat(altStrRX);
     if (isNaN(latRX) || isNaN(lonRX) || latRX === 0 || lonRX === 0) return;
 
     const muxKey = `${channel}_${label}`;
@@ -64,7 +66,7 @@ export function parseMobileDABData(data: RawDABRow[]): MobileScanStats | null {
     }
 
     if (!muxEidMap.has(muxKey) && row.UEID) {
-      const ueid = row.UEID.trim();
+      const ueid = row.UEID?.trim() || '';
       muxEidMap.set(muxKey, ueid.substring(ueid.length - 4));
     }
 
@@ -85,6 +87,7 @@ export function parseMobileDABData(data: RawDABRow[]): MobileScanStats | null {
       pointsMap.set(pointKey, {
         lat: latRX,
         lon: lonRX,
+        altitude: !isNaN(altRX) ? altRX : undefined,
         snr: snr,
         timeMs: timeMs,
         transmitters: []
@@ -97,8 +100,8 @@ export function parseMobileDABData(data: RawDABRow[]): MobileScanStats | null {
       point.snr = snr;
     }
 
-    const mainStr = row.Main.trim().padStart(2, '0');
-    const subStr = row.Sub.trim().padStart(2, '0');
+    const mainStr = (row.Main?.trim() || '').padStart(2, '0');
+    const subStr = (row.Sub?.trim() || '').padStart(2, '0');
     if (mainStr === '00' && subStr === '00') return;
     const tii = `${mainStr}-${subStr}`;
 
@@ -106,14 +109,18 @@ export function parseMobileDABData(data: RawDABRow[]): MobileScanStats | null {
     const levelVal = parseFloat(levelStr);
     const level = isNaN(levelVal) ? -Infinity : levelVal;
 
-    const location = row.Location.trim();
+    const location = row.Location?.trim() || '';
     const power = parseFloat(row['Power [kW]']?.replace(',', '.')) || 0;
     const distance = parseFloat(row['Distance [km]']?.replace(',', '.')) || 0;
 
     const latStrTX = row['Latitude (TX)']?.replace(',', '.') || '';
     const lonStrTX = row['Longitude (TX)']?.replace(',', '.') || '';
+    const altStrTX = row['Altitude (TX)']?.replace(',', '.') || '';
+    const antStrTX = row['Antenna Height (TX)']?.replace(',', '.') || '';
     const latTX = parseFloat(latStrTX);
     const lonTX = parseFloat(lonStrTX);
+    const altTX = parseFloat(altStrTX);
+    const antTX = parseFloat(antStrTX);
 
     // Add transmitter to point if not already there, or update if level is higher
     const existingTx = point.transmitters.find(t => t.tii === tii);
@@ -125,7 +132,9 @@ export function parseMobileDABData(data: RawDABRow[]): MobileScanStats | null {
         power,
         distance,
         lat: (!isNaN(latTX) && latTX !== 0) ? latTX : undefined,
-        lon: (!isNaN(lonTX) && lonTX !== 0) ? lonTX : undefined
+        lon: (!isNaN(lonTX) && lonTX !== 0) ? lonTX : undefined,
+        altitude: !isNaN(altTX) ? altTX : undefined,
+        antennaHeight: !isNaN(antTX) ? antTX : undefined
       });
     } else if (level > existingTx.level) {
       existingTx.level = level;
@@ -157,6 +166,8 @@ export function parseMobileDABData(data: RawDABRow[]): MobileScanStats | null {
             power: tx.power,
             lat: tx.lat,
             lon: tx.lon,
+            altitude: tx.altitude,
+            antennaHeight: tx.antennaHeight,
             pointCount: 0,
             minLevel: Infinity,
             maxLevel: -Infinity,
@@ -220,20 +231,27 @@ export async function enrichWithAltitudes(stats: ScanStats | MobileScanStats, is
   const coords: { lat: number, lon: number, id: string }[] = [];
   const coordsElevMap = new Map<string, number>();
 
-  const processTransmitter = (tx: { lat?: number, lon?: number }) => {
-    if (tx.lat !== undefined && tx.lon !== undefined) {
-      const id = `${tx.lat},${tx.lon}`;
+  const processCoord = (item: { lat?: number, lon?: number, altitude?: number }) => {
+    if (item.lat !== undefined && item.lon !== undefined && item.altitude === undefined) {
+      const id = `${item.lat},${item.lon}`;
       if (!coordsElevMap.has(id)) {
         coordsElevMap.set(id, -1);
-        coords.push({ lat: tx.lat, lon: tx.lon, id });
+        coords.push({ lat: item.lat, lon: item.lon, id });
       }
     }
   };
 
   if (isMobile) {
-    (stats as MobileScanStats).multiplexes.forEach(m => m.transmitters.forEach(processTransmitter));
+    (stats as MobileScanStats).multiplexes.forEach(m => {
+      m.points.forEach(processCoord);
+      m.transmitters.forEach(processCoord);
+    });
   } else {
-    (stats as ScanStats).multiplexes.forEach(m => m.transmitters.forEach(processTransmitter));
+    const s = stats as ScanStats;
+    if (s.rxLat !== undefined && s.rxLon !== undefined) {
+      processCoord({ lat: s.rxLat, lon: s.rxLon, altitude: s.rxAltitude });
+    }
+    s.multiplexes.forEach(m => m.transmitters.forEach(processCoord));
   }
 
   if (coords.length === 0) return;
@@ -265,19 +283,31 @@ export async function enrichWithAltitudes(stats: ScanStats | MobileScanStats, is
     }
   }
 
-  const applyAltitude = (tx: { lat?: number, lon?: number, altitude?: number }) => {
-    if (tx.lat !== undefined && tx.lon !== undefined) {
-      const elev = coordsElevMap.get(`${tx.lat},${tx.lon}`);
+  const applyAltitude = (item: { lat?: number, lon?: number, altitude?: number }) => {
+    if (item.lat !== undefined && item.lon !== undefined && item.altitude === undefined) {
+      const elev = coordsElevMap.get(`${item.lat},${item.lon}`);
       if (elev !== undefined && elev !== -1) {
-        tx.altitude = elev;
+        item.altitude = elev;
       }
     }
   };
 
   if (isMobile) {
-    (stats as MobileScanStats).multiplexes.forEach(m => m.transmitters.forEach(applyAltitude));
+    (stats as MobileScanStats).multiplexes.forEach(m => {
+      m.points.forEach(applyAltitude);
+      m.transmitters.forEach(applyAltitude);
+    });
   } else {
-    (stats as ScanStats).multiplexes.forEach(m => m.transmitters.forEach(applyAltitude));
+    const s = stats as ScanStats;
+    if (s.rxLat !== undefined && s.rxLon !== undefined) {
+      applyAltitude({
+        lat: s.rxLat,
+        lon: s.rxLon,
+        get altitude() { return s.rxAltitude; },
+        set altitude(v) { s.rxAltitude = v; }
+      });
+    }
+    s.multiplexes.forEach(m => m.transmitters.forEach(applyAltitude));
   }
 }
 
@@ -313,6 +343,7 @@ export function parseDABData(data: RawDABRow[]): ScanStats | null {
 
   let rxLat: number | undefined = undefined;
   let rxLon: number | undefined = undefined;
+  let rxAltitude: number | undefined = undefined;
 
   for (const row of validData) {
     if (row['Latitude (RX)'] && row['Longitude (RX)']) {
@@ -321,6 +352,10 @@ export function parseDABData(data: RawDABRow[]): ScanStats | null {
       if (!isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0) {
         rxLat = lat;
         rxLon = lon;
+        if (row['Altitude (RX)']) {
+          const alt = parseFloat(row['Altitude (RX)'].replace(',', '.'));
+          if (!isNaN(alt)) rxAltitude = alt;
+        }
         break; // Take first valid coordinate
       }
     }
@@ -334,8 +369,8 @@ export function parseDABData(data: RawDABRow[]): ScanStats | null {
   const muxDetailsMap = new Map<string, { channel: string, label: string }>();
 
   validData.forEach(row => {
-    const label = row.Label.trim();
-    const channel = row.Channel.trim();
+    const label = row.Label?.trim() || '';
+    const channel = row.Channel?.trim() || '';
     if (!label || !channel) return;
 
     const muxKey = `${channel}_${label}`;
@@ -355,13 +390,13 @@ export function parseDABData(data: RawDABRow[]): ScanStats | null {
 
     // Process EID
     if (!muxEidMap.has(muxKey) && row.UEID) {
-      const ueid = row.UEID.trim();
+      const ueid = row.UEID?.trim() || '';
       muxEidMap.set(muxKey, ueid.substring(ueid.length - 4));
     }
 
     const tiiMap = muxMap.get(muxKey)!;
-    const mainStr = row.Main.trim().padStart(2, '0');
-    const subStr = row.Sub.trim().padStart(2, '0');
+    const mainStr = (row.Main?.trim() || '').padStart(2, '0');
+    const subStr = (row.Sub?.trim() || '').padStart(2, '0');
     const tii = `${mainStr}-${subStr}`;
     
     // Parse numeric values, with safe fallbacks
@@ -382,8 +417,12 @@ export function parseDABData(data: RawDABRow[]): ScanStats | null {
     
     const latStr = row['Latitude (TX)']?.replace(',', '.') || '';
     const lonStr = row['Longitude (TX)']?.replace(',', '.') || '';
+    const altStrTX = row['Altitude (TX)']?.replace(',', '.') || '';
+    const antStrTX = row['Antenna Height (TX)']?.replace(',', '.') || '';
     const lat = parseFloat(latStr);
     const lon = parseFloat(lonStr);
+    const altTX = parseFloat(altStrTX);
+    const antTX = parseFloat(antStrTX);
 
     // Track SNR for min/max
     if (!isNaN(snr)) {
@@ -398,14 +437,16 @@ export function parseDABData(data: RawDABRow[]): ScanStats | null {
         label,
         channel,
         tii,
-        location: row.Location.trim(),
+        location: row.Location?.trim() || '',
         snr,
         level,
         power,
         distance,
         azimuth: hasAzimuth ? azimuth : undefined,
         lat: !isNaN(lat) && lat !== 0 ? lat : undefined,
-        lon: !isNaN(lon) && lon !== 0 ? lon : undefined
+        lon: !isNaN(lon) && lon !== 0 ? lon : undefined,
+        altitude: !isNaN(altTX) ? altTX : undefined,
+        antennaHeight: !isNaN(antTX) ? antTX : undefined
       });
     }
   });
@@ -491,6 +532,7 @@ export function parseDABData(data: RawDABRow[]): ScanStats | null {
     timeZoneStr,
     rxLat,
     rxLon,
+    rxAltitude,
     channelCount: channelSet.size,
     multiplexCount: multiplexes.length, // Multiplexes per channel
     globalTransmitterCount: locationSet.size, // Unique physical locations

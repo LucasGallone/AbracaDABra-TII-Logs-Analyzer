@@ -314,7 +314,9 @@ export function MobileDashboard({
         </div>
       ) : (
         <div className="text-center p-12 bg-white dark:bg-[#313338] rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-sm">
-           <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-2">Aucun multiplex valide</h3>
+           <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-2">
+             {language === 'fr' ? 'Aucun multiplex valide' : 'No valid multiplex'}
+           </h3>
            <p className="text-slate-500 dark:text-slate-400">{t('noMuxFound')}</p>
         </div>
       )}

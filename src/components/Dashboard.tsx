@@ -10,6 +10,7 @@ import { LocationPromptModal } from './LocationPromptModal';
 import { toJpeg } from 'html-to-image';
 import { sortChannels } from '../lib/utils';
 import Papa from 'papaparse';
+import { applyRxCoordinates, enrichWithAltitudes } from '../lib/parser';
 
 interface DashboardProps {
   stats: ScanStats;
@@ -419,7 +420,11 @@ export function Dashboard({ stats, onReset, onUpdateStats, fileCount = 1, rawDat
         stats={stats}
         onSkip={() => setShowLocationPrompt(false)}
         onApply={(lat, lon, address) => {
-          onUpdateStats(prev => prev ? { ...prev, rxLat: lat, rxLon: lon, rxLocationName: address } : null);
+          const updated = applyRxCoordinates(stats, lat, lon, address);
+          onUpdateStats(updated);
+          enrichWithAltitudes(updated, false).then(() => {
+            onUpdateStats({ ...updated });
+          });
           setShowLocationPrompt(false);
         }}
       />

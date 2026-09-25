@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import { useAppContext } from '../contexts/AppContext';
-import { MapPin } from 'lucide-react';
+import { MapPin, AlertTriangle } from 'lucide-react';
 import { ScanStats } from '../types';
 
 interface LocationPromptProps {
@@ -53,6 +53,10 @@ export function LocationPromptModal({ onApply, onSkip, stats }: LocationPromptPr
     }
   }, []);
 
+  const hasTransmittersToEstimate = stats.multiplexes.some(m =>
+    m.transmitters.some(tx => (!tx.lat || !tx.lon || tx.lat === 0 || tx.lon === 0) && tx.distance > 0 && tx.azimuth !== undefined && !isNaN(tx.azimuth))
+  );
+
   const validTx = stats.multiplexes.flatMap(m => m.transmitters).find(tx => !isNaN(tx.lat) && !isNaN(tx.lon) && tx.lat !== 0 && tx.lon !== 0);
   const center: [number, number] = validTx 
      ? [validTx.lat, validTx.lon]
@@ -60,8 +64,8 @@ export function LocationPromptModal({ onApply, onSkip, stats }: LocationPromptPr
 
   useEffect(() => {
     if (pos) {
-      setManualLat(pos[0].toFixed(5));
-      setManualLon(pos[1].toFixed(5));
+      setManualLat(pos[0].toFixed(6));
+      setManualLon(pos[1].toFixed(6));
     }
   }, [pos]);
 
@@ -107,8 +111,8 @@ export function LocationPromptModal({ onApply, onSkip, stats }: LocationPromptPr
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-[#313338] rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700/80">
+    <div className="fixed top-16 inset-x-0 bottom-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-[#313338] rounded-xl shadow-xl w-full max-w-5xl max-h-[calc(100vh-6rem)] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700/80">
         <div className="p-6 pb-4 border-b border-slate-100 dark:border-slate-700/50 flex justify-between items-start">
           <div>
             <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
@@ -141,6 +145,21 @@ export function LocationPromptModal({ onApply, onSkip, stats }: LocationPromptPr
                      : "The GPS coordinates provided during the previous import have been reused. You can modify them for this session if necessary, and disable the save option if you no longer wish to use it for future imports."}
                 </div>
              )}
+             {hasTransmittersToEstimate && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-lg text-xs leading-relaxed text-amber-800 dark:text-amber-200 flex items-start gap-2">
+                   <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                   <div>
+                     <strong className="block font-semibold mb-0.5">
+                       {language === 'fr' ? 'Localisation précise indispensable' : 'High precision required'}
+                     </strong>
+                     <span className="whitespace-pre-line">
+                       {language === 'fr' 
+                         ? "Les coordonnées des émetteurs reçus vont être calculées à partir des distances et azimuts présents dans le fichier.\n\nIndiquez l'emplacement exact du lieu de réception (en saisissant les coordonnées GPS précises ou en zoomant sur la carte) pour un résultat optimal." 
+                         : "Transmitter coordinates will be calculated based on the distances and azimuths contained in the file.\n\nMake sure to provide the exact location of your receiver (by entering precise GPS coordinates or zooming in on the map) for optimal accuracy."}
+                     </span>
+                   </div>
+                </div>
+             )}
              <form onSubmit={handleManualCoordsSubmit} className="flex flex-col gap-4">
                 <div className="space-y-3">
                   <div>
@@ -170,7 +189,7 @@ export function LocationPromptModal({ onApply, onSkip, stats }: LocationPromptPr
                 </div>
                 <label className="flex items-start gap-2 cursor-pointer mt-1 text-sm text-slate-600 dark:text-slate-400">
                   <input type="checkbox" checked={saveLocation} onChange={e => setSaveLocation(e.target.checked)} className="mt-1 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-                  <span className="text-xs">{language === 'fr' ? 'Se souvenir de ces coordonnées pour les prochains imports' : 'Remember these coordinates for future imports'}</span>
+                  <span className="text-xs">{language === 'fr' ? 'Se souvenir de ces coordonnées pour les prochains imports' : 'Remember these coordinates for the next imports'}</span>
                 </label>
              </form>
 

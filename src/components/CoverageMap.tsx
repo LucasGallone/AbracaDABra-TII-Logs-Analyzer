@@ -6,6 +6,7 @@ import L from 'leaflet';
 import { ScanStats } from '../types';
 import { useAppContext } from '../contexts/AppContext';
 import { sortChannels } from '../lib/utils';
+import { applyRxCoordinates, enrichWithAltitudes } from '../lib/parser';
 
 import 'leaflet/dist/leaflet.css';
 
@@ -93,7 +94,14 @@ function MapClickHandler({ onUpdateStats, rxCoords }: { onUpdateStats?: React.Di
 
       window.dispatchEvent(new CustomEvent('close-map-popups'));
       if (!rxCoordsRef.current && onUpdateStatsRef.current) {
-        onUpdateStatsRef.current(prev => prev ? { ...prev, rxLat: e.latlng.lat, rxLon: e.latlng.lng } : null);
+        onUpdateStatsRef.current(prev => {
+          if (!prev) return null;
+          const updated = applyRxCoordinates(prev, e.latlng.lat, e.latlng.lng);
+          enrichWithAltitudes(updated, false).then(() => {
+            onUpdateStatsRef.current?.({ ...updated });
+          });
+          return updated;
+        });
       }
     }
   });
@@ -159,7 +167,19 @@ function ProfileTooltip({ active, payload, label, language, onHoverPoint }: any)
   return null;
 }
 
-export function ElevationProfile({ rxCoords, txCoords, location, onClose, onHoverPoint, onClickPoint, isProfileZoomed, onObstructionChange, txAntennaHeight }: { rxCoords: [number, number]; txCoords: [number, number]; location: string; onClose: () => void; onHoverPoint?: (coords: [number, number] | null) => void; onClickPoint?: (coords: [number, number]) => void; isProfileZoomed?: boolean; onObstructionChange?: (obstructed: boolean) => void; txAntennaHeight?: number; }) {
+export interface ElevationProfileProps {
+  rxCoords: [number, number];
+  txCoords: [number, number];
+  location: string;
+  onClose: () => void;
+  onHoverPoint?: (coords: [number, number] | null) => void;
+  onClickPoint?: (coords: [number, number]) => void;
+  isProfileZoomed?: boolean;
+  onObstructionChange?: (obstructed: boolean) => void;
+  txAntennaHeight?: number;
+}
+
+export const ElevationProfile: React.FC<ElevationProfileProps> = ({ rxCoords, txCoords, location, onClose, onHoverPoint, onClickPoint, isProfileZoomed, onObstructionChange, txAntennaHeight }) => {
   const [rawData, setRawData] = useState<number[] | null>(null);
   const hoveredCoordsRef = useRef<[number, number] | null>(null);
   
@@ -520,7 +540,7 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
       rxC = [Number(stats.rxLat), Number(stats.rxLon)];
     }
 
-    const txMap = new Map<string, { lat: number; lon: number; location: string; altitude?: number; antennaHeight?: number; distance: number; azimuth?: number; muxData: { channel: string; label: string; tii: string; powerStr: string; }[] }>();
+    const txMap = new Map<string, { lat: number; lon: number; location: string; altitude?: number; antennaHeight?: number; distance: number; azimuth?: number; isEstimated?: boolean; muxData: { channel: string; label: string; tii: string; powerStr: string; }[] }>();
     const bnd = new L.LatLngBounds([]);
 
     if (rxC) {
@@ -534,7 +554,7 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
           const tLon = Number(tx.lon);
           const key = `${tLat.toFixed(5)}_${tLon.toFixed(5)}`;
           if (!txMap.has(key)) {
-            txMap.set(key, { lat: tLat, lon: tLon, location: tx.location, altitude: tx.altitude, antennaHeight: tx.antennaHeight, distance: tx.distance || 0, azimuth: tx.azimuth, muxData: [] });
+            txMap.set(key, { lat: tLat, lon: tLon, location: tx.location, altitude: tx.altitude, antennaHeight: tx.antennaHeight, distance: tx.distance || 0, azimuth: tx.azimuth, isEstimated: tx.isEstimated, muxData: [] });
           }
           const entry = txMap.get(key)!;
           // Add multiplex label if not already in list
@@ -769,6 +789,11 @@ export function CoverageMap({ stats, showLines, onUpdateStats }: CoverageMapProp
                       <strong className="text-orange-600 dark:text-orange-500 font-bold text-[13px] leading-tight">
                         {language === 'fr' ? 'Site inconnu !' : 'Unknown site!'}
                       </strong>
+                    )}
+                    {tx.isEstimated && (
+                      <span className="inline-block mt-1 px-1.5 py-0.5 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40 rounded text-[10px] font-medium">
+                        {language === 'fr' ? 'Position calculée (estimée)' : 'Calculated position (estimated)'}
+                      </span>
                     )}
                     <div className="flex flex-col gap-0.5 mt-1.5">
                       {tx.distance > 0 && (

@@ -35,6 +35,7 @@ export interface Transmitter {
   lon?: number;
   altitude?: number;
   antennaHeight?: number;
+  isEstimated?: boolean;
 }
 
 export interface MultiplexStat {

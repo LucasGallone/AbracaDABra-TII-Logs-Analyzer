@@ -431,6 +431,18 @@ export function parseDABData(data: RawDABRow[]): ScanStats | null {
 
     const existingTx = tiiMap.get(tii);
 
+    const hasCoords = !isNaN(lat) && lat !== 0 && !isNaN(lon) && lon !== 0;
+    let txLat = hasCoords ? lat : undefined;
+    let txLon = hasCoords ? lon : undefined;
+    let isEstimated = false;
+
+    if (!hasCoords && rxLat !== undefined && rxLon !== undefined && distance > 0 && hasAzimuth) {
+      const dest = calculateDestinationPoint(rxLat, rxLon, distance, azimuth);
+      txLat = dest.lat;
+      txLon = dest.lon;
+      isEstimated = true;
+    }
+
     // Keep the one with the highest Level
     if (!existingTx || level > existingTx.level) {
       tiiMap.set(tii, {
@@ -443,10 +455,11 @@ export function parseDABData(data: RawDABRow[]): ScanStats | null {
         power,
         distance,
         azimuth: hasAzimuth ? azimuth : undefined,
-        lat: !isNaN(lat) && lat !== 0 ? lat : undefined,
-        lon: !isNaN(lon) && lon !== 0 ? lon : undefined,
+        lat: txLat,
+        lon: txLon,
         altitude: !isNaN(altTX) ? altTX : undefined,
-        antennaHeight: !isNaN(antTX) ? antTX : undefined
+        antennaHeight: !isNaN(antTX) ? antTX : undefined,
+        isEstimated
       });
     }
   });
@@ -540,5 +553,97 @@ export function parseDABData(data: RawDABRow[]): ScanStats | null {
     furthestTransmitter,
     closestTransmitter,
     multiplexes
+  };
+}
+
+/**
+ * Calculates destination coordinates given starting point, distance (km) and bearing/azimuth (degrees).
+ */
+export function calculateDestinationPoint(
+  lat1: number,
+  lon1: number,
+  distanceKm: number,
+  azimuthDeg: number
+): { lat: number; lon: number } {
+  const R = 6371; // Earth's mean radius in kilometers
+  const delta = distanceKm / R; // Angular distance in radians
+  const theta = (azimuthDeg * Math.PI) / 180; // Bearing in radians
+  const phi1 = (lat1 * Math.PI) / 180; // Latitude in radians
+  const lambda1 = (lon1 * Math.PI) / 180; // Longitude in radians
+
+  const sinPhi2 = Math.sin(phi1) * Math.cos(delta) + Math.cos(phi1) * Math.sin(delta) * Math.cos(theta);
+  const phi2 = Math.asin(Math.max(-1, Math.min(1, sinPhi2)));
+
+  const y = Math.sin(theta) * Math.sin(delta) * Math.cos(phi1);
+  const x = Math.cos(delta) - Math.sin(phi1) * Math.sin(phi2);
+  const lambda2 = lambda1 + Math.atan2(y, x);
+
+  // Normalize longitude to -180 .. +180
+  const lon2 = (((lambda2 * 180) / Math.PI + 540) % 360) - 180;
+  const lat2 = (phi2 * 180) / Math.PI;
+
+  return {
+    lat: Number(lat2.toFixed(6)),
+    lon: Number(lon2.toFixed(6))
+  };
+}
+
+/**
+ * Applies receiver coordinates to scan stats and calculates transmitter coordinates
+ * if they are missing but distance and azimuth are available.
+ */
+export function applyRxCoordinates(
+  stats: ScanStats,
+  rxLat: number,
+  rxLon: number,
+  rxLocationName?: string
+): ScanStats {
+  const updatedMultiplexes = stats.multiplexes.map(mux => {
+    let bestTransmitter: Transmitter | null = null;
+    const transmitters = mux.transmitters.map(tx => {
+      const needsCalculation = (tx.lat === undefined || tx.lon === undefined || tx.lat === 0 || tx.lon === 0 || tx.isEstimated);
+      if (needsCalculation && tx.distance > 0 && tx.azimuth !== undefined && !isNaN(tx.azimuth)) {
+        const dest = calculateDestinationPoint(rxLat, rxLon, tx.distance, tx.azimuth);
+        return {
+          ...tx,
+          lat: dest.lat,
+          lon: dest.lon,
+          isEstimated: true
+        };
+      }
+      return tx;
+    });
+
+    if (mux.bestTransmitter) {
+      bestTransmitter = transmitters.find(t => t.tii === mux.bestTransmitter!.tii) || mux.bestTransmitter;
+    }
+
+    return {
+      ...mux,
+      transmitters,
+      bestTransmitter
+    };
+  });
+
+  let furthestTransmitter = stats.furthestTransmitter;
+  let closestTransmitter = stats.closestTransmitter;
+
+  if (furthestTransmitter) {
+    const match = updatedMultiplexes.flatMap(m => m.transmitters).find(t => t.tii === furthestTransmitter!.tii && t.channel === furthestTransmitter!.channel);
+    if (match) furthestTransmitter = match;
+  }
+  if (closestTransmitter) {
+    const match = updatedMultiplexes.flatMap(m => m.transmitters).find(t => t.tii === closestTransmitter!.tii && t.channel === closestTransmitter!.channel);
+    if (match) closestTransmitter = match;
+  }
+
+  return {
+    ...stats,
+    rxLat,
+    rxLon,
+    rxLocationName: rxLocationName !== undefined ? rxLocationName : stats.rxLocationName,
+    multiplexes: updatedMultiplexes,
+    furthestTransmitter,
+    closestTransmitter
   };
 }
